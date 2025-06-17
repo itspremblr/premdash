@@ -2,13 +2,7 @@
     Ctl-opt Copyright('ANDIE Ismaning 2023') Option(*SrcStmt : *NoDebugIO)
             DEBUG DECEDIT('0,') DATEDIT(*DMY/)
             DftActgrp(*No) ActGrp(*Caller);
-    //------------------------------------------------------------------------
-    // Änderung    : CHG-2022-12-0132.
-    // Description : Customer Portal Consent Change.
-    // Date       :   16.10.2023
-    // Programmer :   Premananda Dash
-    //------------------------------------------------------------------------
-
+    
     // Display File.
     Dcl-f ST0198RD  Workstn sfile(S01SFL:#RrnSfl) Infds(FileInfo)
                     Indds(IndDS1);
