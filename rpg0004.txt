@@ -1,45 +1,10 @@
       //---------------------------------------------------------------
-      //                        (c) AND-E Ismaning, 2023
-      //------------------------------------------------------------------------
-      // Change      : CHG-2024-08-0037.
-      // Description : Validation for Garage Address Postal Code .
-      // Date        : 12.08.2024
-      // Programmer  : Premananda Dash
-      //------------------------------------------------------------------------
-      // Change      : CHG-2024-06-0130.
-      // Description : Validation for Repair Compensation and Reserve Cost
-      // Date        : 20.06.2024
-      // Programmer  : Premananda Dash
-      //------------------------------------------------------------------------
-      // Change      : CHG-2024-05-0071.
-      // Description : Add plate# validation i.e Plate# mentioned
-      //               in Webservice link should match with Plate# mentioned
-      //               in Claim request.
-      // Date        : 22.05.2024
-      // Programmer  : Premananda Dash
-      //------------------------------------------------------------------------
-      // Change      : CHG-2024-03-0129.
-      // Description : Italy Web Service Modification 2.0
-      //               Remove WSVERIFMT dependency.
-      //               Connect to Italy prod to read WSVERI in order to build
-      //               response.
-      // Date        : 11.04.2024
-      // Programmer  : Premananda Dash
-      //------------------------------------------------------------------------
-      // Change      : CHG-2023-04-0008.
-      // Description : Additional modifications including optional fields...
-      // Date        : 26.10.2023
-      // Programmer  : Nava Senthil
-      //------------------------------------------------------------------------
-      // Change      : CHG-2023-04-0008.
-      // Description : New Web Service - Create new Claim for Italy
-      // Date        : 21.08.2023
-      // Programmer  : Premananda Dash
+      //                        (c) PremDash Inc Ismaning, 2023
       //------------------------------------------------------------------------
      h nomain PGMINFO(*PCML:*MODULE)
      h datedit(*YMD)
      h decedit('0,')
-     h copyright('ANDIE Ismaning 2023')
+     h copyright('PremDash Ismaning 2023')
       // --------------------------------------
 
       //fWSVERIFMT If   e           k disk
