@@ -1,5 +1,5 @@
 **free
-    Ctl-opt Copyright('ANDIE Ismaning 2023') Option(*SrcStmt : *NoDebugIO)
+    Ctl-opt Copyright('PremDash Inc 2023') Option(*SrcStmt : *NoDebugIO)
             DEBUG DECEDIT('0,') DATEDIT(*DMY/)
             DftActgrp(*No) ActGrp(*Caller);
     
