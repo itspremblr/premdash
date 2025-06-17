@@ -2,53 +2,7 @@
         ctl-opt DftActGrp(*no) debug(*yes) datedit(*dmy/) DECEDIT('0,')
                 option(*nodebugio:*srcstmt);
       // H DEBUG DECEDIT('0,') DATEDIT(*DMY/)
-      //
-      // EINLESEN DER RISIKEN TAP VON VRSTIM NACH VRSTAP
-      //
-      //   Z = ZÄHLER IN KENNZEICHEN AUFBEREITUNG
-      //   Y = ZÄHLER IN KENNZEICHEN AUFBEREITUNG
-      //  §X = ZÄHLER FÜR UPDATE VRSTAP
-      //  §Y = ZÄHLER FÜR BEGRENZUNG VRSTAP
-      //  §Z = ZÄHLER FÜR LOGUP AUF FELDGRUPPE FIN
-      //
-      //-------------------------------------------------------------------------
-      // DATUM: 08.12.2023    Premananda Dash          CHG-2023-12-0032
-      //        Fix Array out of Seq failue for no risk contract.
-      //-------------------------------------------------------------------------
-      // DATUM: 26.07.2023    Premananda Dash          CHG-2023-07-0039
-      //        Conversion from RPG to RPGLE
-      //        convert fixed array to dynamic array.
-      //-------------------------------------------------------------------------
-      // DATUM: 17.03.2017    Lilo Solbach             CHG-2017-03-0024
-      //        KFZ-Kennzeichen immer Großbuchstaben
-      //-------------------------------------------------------------------------
-      // DATUM: 03.03.2016    PETER SPEER              CHG-2016-03-0004
-      //        FIN IN DIE MESSAGE-ID
-      //-------------------------------------------------------------------------
-      // DATUM: 23.02.2016    PETER SPEER              CHG-2016-02-0025
-      //        AUCH UPDATE ERLAUBEN, WENN SICH MFSF ÄNDERT
-      //-------------------------------------------------------------------------
-      // DATUM: 05.01.2016    PETER SPEER              CHG-2016-01-0002
-      //        PRÜFUNG KENNZEICHEN ERWEITERT
-      //-------------------------------------------------------------------------
-      // DATUM: 14.04.2015    PETER SPEER              CHG-2015-01-0051
-      //        AGENTURNUMMER BEFÜLLUNGSLOGIK ERWEITERN
-      //-------------------------------------------------------------------------
-      // DATUM: 27.03.2015    PETER SPEER              CHG-2015-01-0051
-      //        AGENTURNUMMER BEI FA00 = 5 FÜLLEN
-      //-------------------------------------------------------------------------
-      // DATUM: 25.04.2015    PETER SPEER              CHG-2015-02-0029
-      //        FAHRZEUGART LEER BEI TAP UND FLOTTE
-      //-------------------------------------------------------------------------
-      // DATUM: 05.12.2014    PETER SPEER              CHG-2014-12-0003
-      //        DOUBLETTENPRÜFUNG FIN
-      //-------------------------------------------------------------------------
-      // DATUM: 10.07.2014    PETER SPEER              CHG-2014-06-0039
-      //        NEUERSTELLUNG
-      //-------------------------------------------------------------------------
-      //
-      //
-
+            
       //FVRSTIM    IF   E           K DISK
         dcl-f VRSTIM   usage(*input) keyed;
       //FADRSAD    IF   E           K DISK
