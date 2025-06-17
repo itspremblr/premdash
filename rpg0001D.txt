@@ -1,0 +1,143 @@
+      * (C) AIOI München                                     2023 
+      *---------------------------------------------------------------
+      * Änderung    :CHG-2022-12-0132.
+      * Description : New Screen for Einwilligung  Customer Portal.
+      * Datum       : 16.10.2023
+      * Programmer  : Premananda Dash
+      *---------------------------------------------------------------
+      *
+     A                                      INDARA
+     A                                      DSPSIZ(24 80 *DS3)
+     A                                      REF(*LIBL/ST0198RI)
+     A                                      PRINT
+      *   Sub File Format.
+     A          R S01SFL                    SFL
+     A                                      TEXT('Sub_File')
+     A            GTVO#1    R        O  9  2REFFLD(GTVOCM ADRCCM)
+     A            ANZT#1    R        O  9 15REFFLD(ANZTCM ADRCCM)
+     A                                      EDTWRD('0 :  :  ')
+     A            NUCP#1    R        O  9 30REFFLD(NUCPCM ADRCCM)
+     A            EMAL#1    R        O  9 44REFFLD(EMALCM ADRCCM)
+     A            ENPH#1    R        O  9 60REFFLD(ENPHCM ADRCCM)
+     A            SURV#1    R        O  9 75REFFLD(SURVCM ADRCCM)
+      *   Sub File Control Format.
+     A          R S01CTL                    SFLCTL(S01SFL)
+     A                                      TEXT('Sub_File_Control_rec')
+     A  91                                  PUTOVR
+     A  92                                  OVERLAY PROTECT
+     A                                      KEEP
+     A                                      SFLSIZ(14)
+     A                                      SFLPAG(13)
+     A                                      CF06(06 'Zeile einfügen')
+     A                                      CF03(03 'Ende')
+     A  96                                  SFLDSP
+     A N97                                  SFLDSPCTL
+     A  97                                  SFLCLR
+     A  84                                  SFLEND(*MORE)
+     A                                  1  2'ST0198RI'
+     A                                      COLOR(BLU)
+     A                                  1 13'S01FMT'
+     A                                      COLOR(BLU)
+     A                                  1 42SYSNAME
+     A                                      COLOR(BLU)
+     A                                  1 51USER
+     A                                      COLOR(BLU)
+     A                                  1 62DATE
+     A                                      EDTCDE(Y)
+     A                                      COLOR(BLU)
+     A                                  1 71TIME
+     A                                      COLOR(BLU)
+     A                                      EDTWRD('0 :  :  ')
+     A                                  2  2'Adressen - Einwilligungsmatrix Kun-
+     A                                      den Portal       aiDa/BO classic (C-
+     A                                      ) ID GmbH'
+     A                                      COLOR(WHT)
+     A                                      DSPATR(UL)
+     A                                      DSPATR(HI)
+     A                                  3  2'Firma      :'
+     A            FA00H1         1A  O  3 15
+     A  81                                  OVRDTA
+     A            $KNAM         12A  O  3 17
+     A  81                                  OVRDTA
+     A                                  4  2'Adress-Art :'
+     A            ADAR#1    R        O  4 15REFFLD(ADARNO ADRSNO)
+     A  81                                  OVRDTA
+     A            $ADAR         30A  O  4 17
+     A                                  5  2'Adress-Nr. :'
+     A            ADNR#1    R        O  5 15REFFLD(ADNRNO ADRSNO)
+     A  81                                  OVRDTA
+     A            $NAME         50A  O  5 24
+     A  81                                  OVRDTA
+     A                                  7  2'Status.-0(Nein), 1(Ja), 2(Nein/Wai-
+     A                                      t), 3(aktiv unerwünscht),4(nicht un-
+     A                                      erwünscht)'
+     A                                  8  2'Gültig ab.   Anl.zeit.   Nutzung-C-
+     A                                      P   E-Mail-Werbung   Telefone  Kund-
+     A                                      enumfrage'
+     A                                      COLOR(WHT)
+     A                                      DSPATR(HI)
+     A                                      DSPATR(UL)
+      * Trailer Format 1.
+     A          R S01TLR
+     A  91                                  PUTOVR
+     A  92                                  OVERLAY PROTECT
+     A N98                             23  2'F6=Erstellen   F3=Ende  '
+     A  98                             23  2'F3=Ende '
+     A                                      COLOR(BLU)
+     A            ##MESS        78A  O 24  2
+     A                                      DSPATR(HI)
+     A                                      OVRDTA
+      * Windows for entering new Consent Details.
+     A          R S02FMT
+     A  91                                  PUTOVR
+     A                                      WINDOW(10 10 12 66)
+     A                                      WDWBORDER((*COLOR BLU) +
+     A                                                (*CHAR '...:::.:'))
+     A                                      CF12(12 'Abbrechen')
+     A  92                                  OVERLAY PROTECT
+     A                                  1 16'*******  Einwilligungsmatrix *****-
+     A                                      ** '
+     A                                      DSPATR(HI)
+     A                                  3  1'St: 0(Nein),1(Ja),2(Nein/Wait),3(a-
+     A                                      ktiv unerwün.),4(nicht unerwün.)'
+     A                                      DSPATR(HI)
+     A                                  4  2'Gültig ab :'
+     A            GTVO#2         8Y 0O  4 27EDTCDE(9)
+     A  82                                  OVRDTA
+     A  31                                  DSPATR(RI PC)
+     A                                      DSPATR(UL)
+     A*                                 4 38'(DDMMYYYY)'
+     A                                  5  2'Nutzung CustomerPortal:'
+     A            NUCP#2    R        B  5 27REFFLD(NUCPCM ADRCCM)
+     A  82                                  OVRDTA
+     A  32                                  DSPATR(RI PC)
+     A  51                                  DSPATR(PR)
+     A                                  6  2'E-Mail-Werbung        :'
+     A            EMAL#2    R    1   B  6 27REFFLD(EMALCM ADRCCM)
+     A  82                                  OVRDTA
+     A  33                                  DSPATR(RI PC)
+     A  52                                  DSPATR(PR)
+     A                                  7  2'Telefonaktionen       :'
+     A            ENPH#2    R        B  7 27REFFLD(ENPHCM ADRCCM)
+     A  82                                  OVRDTA
+     A  34                                  DSPATR(RI PC)
+     A  53                                  DSPATR(PR)
+      *
+     A                                  8  2'Kundenumfragen        :'
+     A            SURV#2    R        B  8 27REFFLD(SURVCM ADRCCM)
+     A  82                                  OVRDTA
+     A  35                                  DSPATR(RI PC)
+     A  54                                  DSPATR(PR)
+     A                                 10  2'F12=Abbrechen  '
+     A                                      COLOR(BLU)
+     A            #MESS2        49A  O 11  2
+     A                                      DSPATR(HI)
+     A                                      OVRDTA
+     A          R S99WIN
+     A                                       ASSUME
+     A                                  1  2' '
+     A*%%RS+<record-sequences>
+     A*%%RS+ <sequence name="Untitled">
+     A*%%RS+  <device type="display" width="80" height="24" />
+     A*%%RS+ </sequence>
+     A*%%RS </record-sequences>

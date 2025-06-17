@@ -1,0 +1,767 @@
+**free
+    Ctl-opt Copyright('ANDIE Ismaning 2023') Option(*SrcStmt : *NoDebugIO)
+            DEBUG DECEDIT('0,') DATEDIT(*DMY/)
+            DftActgrp(*No) ActGrp(*Caller);
+    //------------------------------------------------------------------------
+    // Änderung    : CHG-2022-12-0132.
+    // Description : Customer Portal Consent Change.
+    // Date       :   16.10.2023
+    // Programmer :   Premananda Dash
+    //------------------------------------------------------------------------
+
+    // Display File.
+    Dcl-f ST0198RD  Workstn sfile(S01SFL:#RrnSfl) Infds(FileInfo)
+                    Indds(IndDS1);
+
+    //IDDOS Table.
+    Dcl-f IPIFWRL1  Keyed;
+
+    //IDDOS Table.
+    Dcl-f XTABTD  Keyed;
+
+     //Addressen file.
+    Dcl-f ADRSAD Keyed;
+
+    //Adresse Activationcode file.
+    Dcl-f ADRREG Keyed;
+
+    // Customer Consent file.
+    Dcl-f ADRCCM Usage(*Update) Keyed;
+
+    //Contract - Logbook File.
+   Dcl-f VLOGVL Usage(*Output:*Update) Keyed;
+
+   //Contract Note File.
+   Dcl-f VNTZVZ Usage(*Output:*Update) Keyed;
+
+   //Contract Note File.
+   Dcl-f VNTZ39 Usage(*Output:*Update) Keyed Rename(VNTZVZR:VNTZ39R);
+
+    //Contract General data with History file.
+    Dcl-f VTRHVVLD Keyed;
+
+
+    // file Information Data structure;
+    Dcl-Ds FileInfo;
+           PressedKey char(1) Pos(369);            // Capture Key pressed.
+    End-Ds;
+
+    // Indicator data stucture mapped to ST0198RI display file.
+    Dcl-Ds IndDS1;
+           Create              Ind Pos(6);
+           Exit                Ind pos(3);
+           Cancel              Ind Pos(12);
+           DateFrom_Err        Ind pos(31);
+           CustPort_Err        Ind pos(32);
+           Email_Adv_Err       Ind pos(33);
+           Telephone_Err       Ind pos(34);
+           Survey_Err          Ind pos(35);
+           Cust_Port_Protect   Ind pos(51);
+           Email_Adv_Protect   Ind pos(52);
+           Telephone_Protect   Ind pos(53);
+           Survey_Protect      Ind pos(54);
+           Scr1_Override_Dta   Ind pos(81);
+           Scr2_Override_Dta   Ind pos(82);
+           Scr_Putover         Ind pos(91);
+           SFL_END             Ind pos(84);
+           Scr_Putovr          Ind Pos(91);
+           Scr_Overlay         Ind Pos(92);
+           SFL_DSP             Ind pos(96);
+           SFL_CLEAR           Ind Pos(97);
+           InquiryScr_Ind      Ind pos(98);       // Indicator used to display screen in inquiry mod
+    End-Ds;
+
+    // Enter Key constant.
+    Dcl-C Enter_Key const(x'F1');                      // If enter key is pressed.
+
+    Dcl-Ds ConsentDS extname('ADRCCM') qualified;
+    End-Ds;
+
+    // Program Status data Structure.
+    Dcl-Ds Pgm_Stat PSDS;
+           Pgm_Status *STATUS;
+           Routine    *ROUTINE;
+           Current_User char(10) pos(358);
+     End-Ds;
+
+     Dcl-Ds Cust_ConsentDs qualified;
+            Window_Cust_Port     Char(1);
+            Window_Email_Adv     Char(1);
+            Window_Telephone     Char(1);
+            Window_Survey        Char(1);
+     END-DS;
+
+    // Copy-Book für ADRESSEN.
+    /COPY CPYLE,PP0150INPI
+
+    // IVVR Copy Book.
+    /COPY CPYLE,PPIVVRINPI
+
+    // Retrieve IDDOS value Procedure.
+    Dcl-Pr IDDOS_Value_Check Extpgm('IP020RGB');
+           *n Char(10);            // Attribute
+           *n Char(15);            // value
+           *n Char(30);            // Value Description
+           *n Char(15);            // Param
+           *n Char(1);             // Record found
+    End-Pr;
+
+    //Standalone field.
+
+    Dcl-S  #RrnSfl                  Packed(4);              //Sub-file RRN.
+
+    // Start of IDDOS Attribute .
+    Dcl-S  IP020_Attr               Char(10);
+    Dcl-S  IP020_Value              Char(15);
+    Dcl-S  IP020_ValueDesc          Char(30);
+    Dcl-S  IP020_Param              Char(15);
+    Dcl-S  IP020_Recfound           Char(1);
+    // End of IDDOS attribute.
+    Dcl-S  MessageId                Char(7) ;              // Used in Exec SQL to capture
+    Dcl-S  MessageText              Char(40) ;             // SQL diagnosis message.
+    Dcl-S  Err_Write                Ind;
+    Dcl-S  #Screen1_Ind             Ind;
+    Dcl-S  #Window_Ind              Ind;
+    Dcl-S  Current_Date             Date(*iso);
+    Dcl-S  Adr_Last_Name            Char(30);
+    Dcl-S  Adr_First_Name           Char(30);
+    Dcl-S  #Char_date               Char(8);
+    Dcl-S  #Dec_Date                Packed(8);
+    Dcl-S  #LatestvalidfromDate     like(GTVOCM);
+    Dcl-S  #Next_Lfdn               like(LFDNCM);
+    Dcl-Ds Date_Ds qualified;
+           #Dec_YY                  Packed(4);
+           #Dec_MM                  Packed(2);
+           #Dec_DD                  Packed(2);
+    END-DS;
+
+    Dcl-S iNotiz                    like(TXTZVZ);
+    // *Entry Plist for IVVR Parm.
+
+    Dcl-PI *N;
+        §§IVVR likeds(§IVVR);
+        §§0150 likeds(§0150);
+    End-PI;
+
+    //*************************************************************************
+    // Main Processing.
+    //*************************************************************************
+    Exec sql set option commit = *none;
+
+    Monitor;
+
+    Initialise_Subr(§§IVVR:§§0150);
+    Dow *inlr = *Off;
+        Process_Screen1();
+    ENDDO;
+
+    On-Error *all;
+       Dump;
+       return;
+    Endmon;
+
+    //**************************************************************
+    // Initialise Procedure.
+    //**************************************************************
+    Dcl-Proc Initialise_Subr;
+
+        Dcl-pi *N ;
+           #InIVVR likeds(§§IVVR);
+           #In0150 likeds(§§0150);
+        End-PI;
+
+        FA00H1  = #InIVVR.§§FA00;                 // Firma
+        $KNAM   = #InIVVR.§§KNAM;                 // Firma Name
+        ADAR#1  = #In0150.§0150A;                 // Address Art
+        ADNR#1  = #In0150.§0150B;                 // Address Number
+
+        // Retrieve Vorname and Name for Address received.
+
+        Exec Sql Select NAM1AD, VNAMAD into :Adr_Last_Name, :Adr_First_Name
+                 from ADRSAD
+                 Where ADARAD = :ADAR#1 and
+                       ADNRAD = :ADNR#1;
+
+        $NAME   = Adr_Last_Name;                 // Address Name
+
+        if Adr_First_Name <> *blanks;
+           $NAME = %Trim($NAME) + ',' + ' ' + %trim(Adr_First_Name);
+        Endif;
+
+        IP020_Attr = 'ADAR';
+        IP020_Value = ADAR#1;
+        IDDOS_Value_Check(IP020_Attr:IP020_Value:IP020_ValueDesc
+                          :IP020_Param:IP020_Recfound);
+
+        If  IP020_Recfound = 'Y';
+            $ADAR = IP020_ValueDesc;
+        ENDIF;
+
+    End-Proc Initialise_Subr;
+
+    //**************************************************************
+    // Clear Sub-file before loading.
+    //**************************************************************
+
+    Dcl-Proc SubFile_Clear;
+             SFL_CLEAR = *On;
+             Write S01CTL;
+             SFL_CLEAR = *Off;
+    END-PROC SubFile_Clear;
+
+    //**************************************************************
+    // Load Sub file Procedure.
+    // This procedure loads address consent details from ADRCCM.
+    //**************************************************************
+
+    Dcl-Proc LoadSubFile;
+        Dcl-pi *N ;
+           Load_Address_Type Char(1);
+           Load_Address_Number Char(8);
+        End-PI;
+
+       Clear #RrnSfl;
+       Clear Cust_ConsentDs.Window_Cust_Port;
+       Clear Cust_ConsentDs.Window_Email_Adv;
+       Clear Cust_ConsentDs.Window_Telephone;
+       Clear Cust_ConsentDs.Window_Survey;
+       Clear #LatestvalidfromDate;
+
+       SFL_DSP = *Off;
+       SFL_END = *Off;
+
+       // Declare scroll Cursor to load number of record into sub-file.
+       Exec SQL Declare ADRCCM_Cursor scroll cursor for
+                select GTVOCM, ANZTCM, NUCPCM, EMALCM, ENPHCM, SURVCM
+                from ADRCCM
+                where ADARCM = :Load_Address_Type and
+                      ADNRCM = :Load_Address_Number
+                      Order by GTVOCM DESC, ANZTCM DESC;
+
+       // Open Cursor.
+       Exec SQL OPEN ADRCCM_Cursor;
+
+       // fetch first Row.
+       Exec SQL Fetch first from ADRCCM_Cursor into :GTVO#1, :ANZT#1, :NUCP#1,
+                :EMAL#1, :ENPH#1, :SURV#1;
+
+       Dow SQLCOD = 0;          // Check Record found .
+           #RrnSfl += 1;
+
+           If #RrnSfl = 1;
+              #LatestvalidfromDate = GTVO#1;
+              Cust_ConsentDs.Window_Cust_Port = NUCP#1;
+              Cust_ConsentDs.Window_Email_Adv = EMAL#1;
+              Cust_ConsentDs.Window_Telephone = ENPH#1;
+              Cust_ConsentDs.Window_Survey = SURV#1;
+           Endif;
+
+           #Char_date = %Editc(GTVO#1:'X');
+           #Dec_date = %dec(%Subst(#Char_date:7:2) +
+                                  %Subst(#Char_date:5:2) +
+                                  %Subst(#Char_date:1:4):8:0);
+           GTVO#1 = #Dec_date;
+           Write S01SFL;
+
+
+           If #RrnSfl = 9999;
+              Leave;
+           ENDIF;
+
+           Exec SQL Fetch next from ADRCCM_Cursor into :GTVO#1, :ANZT#1, :NUCP#1,
+                :EMAL#1, :ENPH#1, :SURV#1;
+
+       ENDDO;
+
+       Exec SQL CLOSE ADRCCM_Cursor;
+
+       If #RrnSfl > 0;
+         SFL_DSP = *On;
+         SFL_END = *ON;
+       ENDIF;
+    End-Proc LoadSubFile;
+
+    //**************************************************************
+    // Display Screen1 and Data processing.
+    //**************************************************************
+
+     Dcl-Proc Process_Screen1;
+        InquiryScr_Ind = *off;
+        #Screen1_Ind = *On;
+        Dow #Screen1_Ind = *On;
+            SubFile_Clear();
+            LoadSubFile(ADAR#1:ADNR#1);
+
+            If §§0150.§01500 = '5';
+               InquiryScr_Ind = *on;
+            ENDIF;
+            Write S01TLR;
+            Scr_Overlay = *On;
+            Exfmt S01CTL;
+            if PressedKey = Enter_Key;
+               Scr1_Override_Dta = *on;
+               Scr_Putover = *on;
+            ENDIF;
+
+            Screen1_CmdProc();     // Command Processing for Screen 1
+        ENDDO;
+    End-Proc Process_Screen1;
+
+    //**************************************************************
+    // Display Create new Cust_Consent screen.
+    //**************************************************************
+    Dcl-Proc Process_Window1;
+      Dcl-pi *n;
+          #WinCust_ConsentDs likeds(Cust_ConsentDs);
+      END-PI;
+
+        #Window_Ind = *on;
+        Err_Write = *Off;
+        Dow #Window_Ind = *On;
+            Current_Date = %Date();
+            Date_Ds.#Dec_YY = %subdt(Current_Date:*Y);
+            Date_Ds.#Dec_MM = %subdt(Current_Date:*M);
+            Date_Ds.#Dec_DD = %subdt(Current_Date:*D);
+            #Char_Date = %Editc(Date_Ds.#Dec_DD:'X') +
+                         %Editc(Date_Ds.#Dec_MM:'X') +
+                         %Editc(Date_Ds.#Dec_YY:'X');
+
+            GTVO#2 = %Dec(#Char_Date:8:0);
+
+            If #WinCust_ConsentDs.Window_Cust_Port <> *Blanks;
+               NUCP#2 = #WinCust_ConsentDs.Window_Cust_Port;
+               EMAL#2 = #WinCust_ConsentDs.Window_Email_Adv;
+               ENPH#2 = #WinCust_ConsentDs.Window_Telephone;
+               SURV#2 = #WinCust_ConsentDs.Window_Survey;
+               Cust_port_Protect = *on;
+               Email_Adv_Protect = *on;
+            Else;
+              Load_DefaultConsent();
+            ENDIF;
+
+            Exfmt S02FMT;
+            Scr2_Override_Dta = *off;
+            Scr_Putover = *off;
+            Err_Write = *Off;
+            Create = *off;
+            if PressedKey = Enter_Key;
+               Scr2_Override_Dta = *on;
+               Scr_Putover = *on;
+            ENDIF;
+            Window1_CmdProc();
+        ENDDO;
+    End-Proc Process_Window1;
+
+    //**************************************************************
+    // process Command for Sub-file.
+    // This procedure loads address consent details from ADRCCM
+    // for the address received from Init sub-procedure.
+    //**************************************************************
+
+    Dcl-Proc Screen1_CmdProc;
+
+        If Exit = *On;                // F03 is Pressed.
+           *Inlr = *On;
+           #Screen1_Ind = *off;
+           ##MESS = ' ';
+        Endif;
+
+        If Create = *On and InquiryScr_Ind = *off;             // F06 is Pressed.
+           Clear  GTVO#2;
+           Clear  NUCP#2;
+           Clear  EMAL#2;
+           Clear  ENPH#2;
+           Clear  SURV#2;
+
+           Scr1_Override_Dta = *off;
+           Scr2_Override_Dta = *off;
+           Scr_Putover = *off;
+           Create = *off;
+           Process_Window1(Cust_ConsentDs);
+        Endif;
+
+    End-Proc Screen1_CmdProc;
+
+    //**************************************************************
+    // Process Command for Windows .
+    //**************************************************************
+
+    Dcl-Proc Window1_CmdProc;
+
+        //Clear Array_Contract;
+        Current_Date = %Date();
+        DateFrom_Err = *off;
+        CustPort_Err = *Off;
+        Email_Adv_Err = *Off;
+        Telephone_Err = *Off;
+        Survey_Err = *Off;
+
+        If Not Cancel;                              // F12 is Off.
+           Validation_Screen();
+
+           If Err_Write = *Off;                   // No error, write record.
+              Write_ConsentDs();
+              Insert_Eninwillung(ConsentDs);
+              If WriteLogBook();
+                 WriteNote();
+              Endif;
+           Endif;
+         Else;                                   // F12 is On.
+           #Window_Ind = *off;
+           #MESS2 = ' ';
+        Endif;
+
+    End-Proc Window1_CmdProc;
+
+    //**************************************************************
+    // Procedure to validate Scren data .
+    //**************************************************************
+    Dcl-Proc Validation_Screen;
+           Select;
+
+              When (NUCP#2 = *blanks and EMAL#2 = *blanks and
+                    ENPH#2 = *blanks and SURV#2 = *blanks);
+
+                    #MESS2 = 'Gültige Auswahl eingeben';
+                    CustPort_Err = *On;
+                    Email_Adv_Err = *On;
+                    Telephone_Err = *On;
+                    Survey_Err = *On;
+                    Err_Write = *On;
+
+               When NUCP#2 = *blanks;
+                    #MESS2 = 'Nutzun CP kann nicht leer sein';
+                    CustPort_Err = *On;
+                    Err_Write = *On;
+
+               When EMAL#2 = *blanks;
+                    #MESS2 = 'Email-Werbung kann nicht leer sein';
+                    Email_Adv_Err = *On;
+                    Err_Write = *On;
+
+               When ENPH#2 = *blanks;
+                     #MESS2 = 'Telefonaktionen kann nicht leer sein';
+                     Telephone_Err = *On;
+                     Err_Write = *On;
+
+               When SURV#2 = *blanks;
+                    #MESS2 = 'Kundenumfragen kann nicht leer sein';
+                    Survey_Err = *On;
+                    Err_Write = *On;
+           ENDSL;
+
+           If Err_Write = *off;
+
+               If NUCP#2 in %range('0':'4');
+                  CustPort_Err = *off;
+               Else;
+                  #MESS2 = 'Eingabe eines Wertes zwischen 0 und 4';
+                  CustPort_Err = *On;
+                  Err_Write = *On;
+               ENDIF;
+
+               If EMAL#2 in %range('0':'4');
+                  Email_Adv_Err = *off;
+               Else;
+                  #MESS2 = 'Eingabe eines Wertes zwischen 0 und 4';
+                  Email_Adv_Err = *On;
+                  Err_Write = *On;
+               ENDIF;
+
+               If ENPH#2 in %range('0':'4');
+                  Telephone_Err = *Off;
+               Else;
+                  #MESS2 = 'Eingabe eines Wertes zwischen 0 und 4';
+                  Telephone_Err = *On;
+                  Err_Write = *On;
+               ENDIF;
+
+               If SURV#2 in %range('0':'4');
+                  Survey_Err = *off;
+               Else;
+                  #MESS2 = 'Eingabe eines Wertes zwischen 0 und 4';
+                  Survey_Err = *On;
+                  Err_Write = *On;
+               ENDIF;
+
+           EndIf;
+
+    END-PROC Validation_Screen;
+
+    //**************************************************************
+    // Procedure to Load Default consent into screen.
+    //**************************************************************
+    Dcl-Proc Load_DefaultConsent;
+
+            Setll (ADAR#1:ADNR#1) ADRREG;
+            Reade (ADAR#1:ADNR#1) ADRREG;
+            IF %found(ADRREG) and not %Eof(ADRREG);
+               Select;
+               When RGCSEG = '1';
+                    NUCP#2 = '0';
+                    EMAL#2 = '0';
+                    ENPH#2 = '0';
+                    SURV#2 = '0';
+                    Cust_port_Protect = *on;
+                    Email_Adv_Protect = *on;
+
+               When RGCSEG = '9';
+                    NUCP#2 = '1';
+                    EMAL#2 = '1';
+                    ENPH#2 = '0';
+                    SURV#2 = '0';
+                    Cust_Port_Protect = *on;
+                    Email_Adv_Protect = *on;
+
+               ENDSL;
+            ENDIF;
+
+
+    END-PROC Load_DefaultConsent ;
+
+    //**************************************************************
+    // Procedure to Write data into Consent Data Structure.
+    //**************************************************************
+    Dcl-Proc Write_ConsentDs;
+
+        ConsentDS.ADARCM = ADAR#1;
+        ConsentDS.ADNRCM = ADNR#1;
+        ConsentDS.GTVOCM = %Dec(%char(Current_Date:*Iso0):8:0);
+
+        Process_Lfdn();            // calculate new Sequence# .
+
+        ConsentDS.NUCPCM = NUCP#2;
+        ConsentDS.EMALCM = EMAL#2;
+        ConsentDS.ENPHCM = ENPH#2;
+        ConsentDS.SURVCM = SURV#2;
+        ConsentDS.ANDTCM = %Dec(%char(Current_Date:*Iso0):8:0);
+        ConsentDS.ANZTCM = %Dec(%time():*HMS);
+        ConsentDS.ANUSCM = Current_User;
+        ConsentDS.AEDTCM = 0;
+        ConsentDS.AEZTCM = 0;
+        ConsentDS.AEUSCM = ' ';
+    END-PROC Write_ConsentDs ;
+
+    //**************************************************************
+    // Process Sequence# (LFDN) based on valid from date.
+    //**************************************************************
+
+    Dcl-proc Process_Lfdn;
+
+        Clear #Next_Lfdn;
+        Select;
+
+          When #RrnSfl > 0;
+
+               // Declare Cursor to retrieve latest sequence# based on date.
+
+               Exec SQL Declare LFDN_Cursor scroll cursor for
+                        Select LFDNCM from ADRCCM
+                        Where  ADARCM = :ADAR#1 and
+                               ADNRCM = :ADNR#1 and
+                               GTVOCM = :ConsentDS.GTVOCM;
+
+               // Open Cursor.
+               Exec SQL OPEN LFDN_Cursor;
+
+               //Fetch Cursor
+               Exec SQL Fetch first from LFDN_Cursor into :#Next_Lfdn;
+
+               Dow SQLCOD = 0 ;
+                    Exec SQL Fetch next from LFDN_Cursor into :#Next_Lfdn;
+               ENDDO;
+
+               Exec SQL CLOSE LFDN_Cursor;
+
+               If #LatestvalidfromDate <> ConsentDS.GTVOCM;
+                  ConsentDS.LFDNCM = 0;
+               Else;
+                  ConsentDS.LFDNCM = #Next_Lfdn + 1;
+               Endif;
+          Other;
+               ConsentDS.LFDNCM = 0;
+        ENDSL;
+
+    END-PROC Process_Lfdn;
+
+    //**************************************************************
+    // Insert new Record into ADRCCM.
+    //**************************************************************
+
+    Dcl-Proc Insert_Eninwillung;
+      Dcl-pi *n;
+          #ConsentDs likeds(ConsentDs);
+      END-PI;
+        Exec SQL insert into ADRCCM values(:#ConsentDS);
+
+        Exec sql GET DIAGNOSTICS CONDITION 1
+               :MessageId = DB2_MESSAGE_ID,
+               :MessageText = MESSAGE_TEXT ;
+
+        If MessageId = 'SQL0803';                  // Duplicate row Check.
+           Err_Write = *On;
+           #MESS2 = 'Doppelte Einwilligung vorhanden';
+        ENDIF;
+
+        If MessageId = 'SQL7956';                 // Insert Success.
+           Err_Write = *off;
+           #MESS2 = ' ';
+           #Window_Ind = *off;
+        ENDIF;
+    END-PROC Insert_Eninwillung;
+
+    //**************************************************************
+    // Write Details into Contract Log file.
+    //**************************************************************
+
+    Dcl-Proc WriteLogBook;
+
+         Dcl-pi WriteLogBook Ind;
+         END-PI;
+
+         Setll ('1': ADAR#1: ADNR#1) VTRHVVLD;
+         Dou %Eof(VTRHVVLD);
+             Reade(e) ('1': ADAR#1: ADNR#1) VTRHVVLD;
+             If not %eof(VTRHVVLD);
+                If VTNRVV = §§IVVR.§§VTNR and STDTVV = *zeros;
+                   CreateLogEntry();
+                   return *on;
+                Else;
+                   Iter;
+                ENDIF;
+             ENDIF;
+         ENDDO;
+    END-PROC WriteLogBook;
+
+    //**************************************************************
+    // Create New Log Entry.
+    //**************************************************************
+
+    Dcl-Proc CreateLogEntry;
+
+         Dcl-s WrkDate like(DAT8VL);
+         WrkDate = %Dec(%char(Current_Date:*Iso0):8:0);
+         Setgt (FA00VV:VTNRVV:*HIVAL) VLOGVL;
+         Readpe(en) (FA00VV:VTNRVV) VLOGVL;
+         If %eof(VLOGVL);
+
+            // No log entry, new entry with change number 1.
+            clear VLOGVLR;
+            FA00VL = FA00VV;
+            VTNRVL = VTNRVV;
+            AENRVL = 1;
+
+         Else;
+
+            // Logbook entry available, add new record.
+            If DAT8VL <> wrkDate or
+               ((USERVL = Current_User) and VGARVL <> '2') or
+                (USERVL <> Current_User);
+
+                // Create Entry.
+                AENRVL += 1;
+            Endif;
+
+            VGARVL = '2';
+            KZTAVL = '1';
+            LTARVL = 0;
+            LFARVL = *Blanks;
+            AEG1VL = *Blanks;
+            AEG2VL = *Blanks;
+            AEG3VL = *Blanks;
+            LFARVL = *Blanks;
+            LTAEVL = %Dec(%char(Current_Date:*Iso0):8:0);
+            DAT8VL = LTAEVL;
+            LTARVL = LTAEVL;
+            USERVL = Current_User;
+
+            Write(e) VLOGVLR;
+         Endif;
+    END-PROC CreateLogEntry;
+
+    //**************************************************************
+    // Write User Action into Contract Note file.
+    //**************************************************************
+
+    Dcl-Proc WriteNote;
+         Dcl-s  newNote   Ind;
+         Dcl-S  oldLine   Packed(4:0);
+
+          Setgt (FA00VV:VTNRVV) VNTZVZ;
+          Readpe(e) (FA00VV:VTNRVV) VNTZVZ;
+          If %Eof(VNTZVZ);
+             newNote = *on;
+             oldLine = 0;
+          Else;
+             newNote = *off;
+             oldLine = ZEILVZ;
+          Endif;
+
+          Select;
+             when newNote;
+
+             // No note, new entry with line 1
+                CrtNote(oldLine);
+
+             other;
+
+             // Move old records from VNTZVZ to VNTZ39
+                Setll (FA00VV:VTNRVV) VNTZVZ;
+                Reade(e) (FA00VV:VTNRVV) VNTZVZ;
+                Dou %eof(VNTZVZ);
+                   If AENRVZ <> AENRVL;
+                      KZNOVZ = 'O';
+                      AENLVZ = AENRVL;
+                      Write(e) VNTZ39R;
+                   Endif;
+                   Reade(e) (FA00VV:VTNRVV) VNTZVZ;
+                Enddo;
+
+             // Add new line to the note
+                CrtNote(oldLine);
+             endsl;
+
+    END-PROC WriteNote;
+
+    //**************************************************************
+    // Create new note.
+    //**************************************************************
+
+    Dcl-Proc CrtNote;
+
+       Dcl-Pi CrtNote;
+         OldLine  Packed(4:0);
+       END-PI;
+
+       Chain(e) ('PRCA':'D':'CP_EIN') IPIFWRL1;
+       If %found(IPIFWRL1);
+          iNotiz = %char(%date():*EUR) + ' ' + %trim(WOMSIF) + ' ' +
+                   'by ' + %Trim(Current_User);
+       Else;
+          Chain(e) (BNNMIF:TLCDIF:WRDEIF) XTABTD;
+              If %found(XTABTD);
+                iNotiz = %char(%date():*EUR) + ' ' + %trim(EXTBTD) + ' ' +
+                         'by ' + %Trim(Current_User);
+              Endif;
+       Endif;
+
+       Clear VNTZVZR;
+       FA00VZ = FA00VV;
+       VTNRVZ = VTNRVV;
+       ZEILVZ = oldLine + 1;
+       AEUSVZ = *blanks;
+       AEDTVZ = 0;
+       AENRVZ = AENRVL;
+       TXTZVZ = %trim(iNotiz);
+       STATVZ = *blanks;
+       AENLVZ = 0;
+       KZNOVZ = *blanks;
+       ANUSVZ = Current_User;
+       ANDTVZ = %Dec(%char(Current_Date:*Iso0):8:0);
+       Write(e) VNTZVZR;
+
+       AENLVZ = AENRVL;
+       KZNOVZ = 'N';
+       Write(e) VNTZ39R;
+    END-PROC CrtNote;
+

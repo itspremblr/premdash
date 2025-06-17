@@ -1,0 +1,394 @@
+      //---------------------------------------------------------------
+      //                        (c) AND-E Ismaning, 2023
+      //------------------------------------------------------------------------
+      // Change      : CHG-2024-08-0037.
+      // Description : Validation for Garage Address Postal Code .
+      // Date        : 12.08.2024
+      // Programmer  : Premananda Dash
+      //------------------------------------------------------------------------
+      // Change      : CHG-2024-06-0130.
+      // Description : Validation for Repair Compensation and Reserve Cost
+      // Date        : 20.06.2024
+      // Programmer  : Premananda Dash
+      //------------------------------------------------------------------------
+      // Change      : CHG-2024-05-0071.
+      // Description : Add plate# validation i.e Plate# mentioned
+      //               in Webservice link should match with Plate# mentioned
+      //               in Claim request.
+      // Date        : 22.05.2024
+      // Programmer  : Premananda Dash
+      //------------------------------------------------------------------------
+      // Change      : CHG-2024-03-0129.
+      // Description : Italy Web Service Modification 2.0
+      //               Remove WSVERIFMT dependency.
+      //               Connect to Italy prod to read WSVERI in order to build
+      //               response.
+      // Date        : 11.04.2024
+      // Programmer  : Premananda Dash
+      //------------------------------------------------------------------------
+      // Change      : CHG-2023-04-0008.
+      // Description : Additional modifications including optional fields...
+      // Date        : 26.10.2023
+      // Programmer  : Nava Senthil
+      //------------------------------------------------------------------------
+      // Change      : CHG-2023-04-0008.
+      // Description : New Web Service - Create new Claim for Italy
+      // Date        : 21.08.2023
+      // Programmer  : Premananda Dash
+      //------------------------------------------------------------------------
+     h nomain PGMINFO(*PCML:*MODULE)
+     h datedit(*YMD)
+     h decedit('0,')
+     h copyright('ANDIE Ismaning 2023')
+      // --------------------------------------
+
+      //fWSVERIFMT If   e           k disk
+     fWSVERI    If   e           k disk
+
+      // copy Book for IVVR data Structure.
+      /copy CPYLE,PPIVVRINPD
+
+      // Copy book for File lock.
+      /copy CPYLE,PP0015INPI
+
+      // Copy book for file status data structure.
+      /copy CPYLE,PPIVVRPSDS
+
+      // Copy Book for Web service variable/Data structure
+      /copy CPYLE,WS0000V
+
+      //Copy book for Web Service procedure prototype
+      /copy CPYLE,WS0000P
+
+     d quote           s              1a   Inz('''')
+     d ivvr_Sysname    s              4a
+     d ivvr_RmtFile    s             10a
+     d ivvr_RmtLoc     s              8a
+     d ivvr_LocServer  s              8a
+     d ivvr_Dtalib     s             10a
+     d sqlString       s           1000a
+     d ivvr_Dtaara     s           2000a
+     d §fuid           s             36a
+     d rmt_SQLstatus   s             10s 0
+     d record_count    s              5s 0
+     d claims_Date     s              8s 0
+     d ws_Status       s                   like(STATRI)
+     d ws_contractNum  s                   like(VTNRRI)
+     d ws_claim_Num    s                   like(SCNRRI)
+     d ws_VAT_Typ      s                   like(SBFRRI)
+     d ws_ErrNumber    s                   like(IDNRRI)
+     d ws_message      s                   like(MSGDRI)
+     d command         s            250a
+      *
+     d ExecClCmd       pr                   Extpgm('QCMDEXC')
+     d                              512a    const
+     d                               15p 5  const
+      *
+     d get_uid         pr                  ExtPgm('TL0574RB')
+     d                               36    const
+      * --------------------------------------
+
+        Exec sql set option commit = *none;
+
+      * ---------------------------------------------------
+      * POST Request - Create/Process New Claim request.
+      * ---------------------------------------------------
+     p addClaim        b                   export
+     d addClaim        pi
+     d  plateNumber                  12    const
+     d  claimData                          const likeds(claimDS)
+     d  httpHeadA                   100a   const
+     d  responseData                       likeds(resDS)
+     d  httpStatus                   10i 0
+     d  httpHeaders                 100a   dim(10)
+      //
+           httpStatus = 0;
+           clear httpHeaders;
+           clear record_count;
+
+           §in = httpHeadA;
+           §pos = %scan(':': §in);
+           if §pos > 1 and %subst(§in: §pos : 12) = ':SYSTEM:IVVR';
+              §out = %trim(%subst(§in: 1: 29));
+           else;
+           getUser (§in: §out);
+           endif;
+           if §out <> *all' ';
+              §pos = %scan(':': §out);
+              if §pos > 1;
+                 §user = %subst(§out: 1: §pos-1);
+              endif;
+           endif;
+           if §user = *all' ';
+              §user = 'WEBSERVICE';
+           endif;
+           §processCode = 'updateClaim';
+           clear §returncode;
+           clear §wsdata;
+
+           claimDs2.claimDate      = claimData.claimDate;
+           claimDs2.claimNotifDate = claimData.claimNotifDate;
+           claimDs2.claimReason    = claimData.claimReason;
+           claimDs2.claimType      = claimData.claimType;
+           claimDs2.claimProvider  = claimData.claimProvider;
+           claimDs2.claimHandler   = claimData.claimHandler;
+
+           claimDs2.claimAddress.streetdetail =
+                  claimData.claimAddress(1);
+
+           claimDs2.claimAddress.postalCode =
+                  claimData.claimAddress(2);
+
+            claimDs2.claimAddress.country =
+                   claimData.claimAddress(3);
+
+           claimDs2.GarageAddress.addressNumber =
+                    claimData.GarageAddress(1);
+
+           claimDs2.GarageAddress.garageName    =
+                    claimData.GarageAddress(2);
+
+           claimDs2.GarageAddress.streetdetail  =
+                    claimData.GarageAddress(3);
+
+           claimDs2.GarageAddress.postalCode    =
+                    claimData.GarageAddress(4);
+
+           claimDs2.GarageAddress.country       =
+                    claimData.GarageAddress(5);
+
+           claimDs2.GarageAddress.city          =
+                    claimData.GarageAddress(6);
+
+           claimDs2.GarageAddress.fiscalCode    =
+                    claimData.GarageAddress(7);
+
+           claimDs2.plateNumber   = %upper(claimData.plateNumber);
+           claimDs2.policyNumber  = claimData.policyNumber;
+           claimDs2.guaranteeCode = claimData.guaranteeCode;
+           claimDs2.agreement     = claimData.agreement;
+           claimDs2.claimantAddr  = claimData.claimantAddr;
+           claimDs2.resrepairComp = claimData.resrepairComp;
+           claimDs2.reservCost    = claimData.reservCost;
+
+           claimDs2.damageLocation.damgLoc1 =
+                claimData.damageLocation(1);
+
+           claimDs2.damageLocation.damgLoc2 =
+                claimData.damageLocation(2);
+
+           claimDs2.damageLocation.damgLoc3 =
+                claimData.damageLocation(3);
+
+           claimDs2.damageLocation.damgLoc4 =
+                claimData.damageLocation(4);
+
+           claimDs2.primpValue    =  claimData.primpValue;
+           claimDs2.faapValue     =  claimData.faapValue;
+
+           §wsdata = §processCode + plateNumber + claimDs2;
+           §method = 'POST';
+           §uid = *all' ';
+           §tist = *all' ';
+           get_uid(§fuid);
+           §uid = §fuid;
+
+           Clear responseData;
+
+           // If Plate Number is blank, rejection.
+           If plateNumber = *blanks;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Plate Number is Blank';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Plate# received in Web Link should match with Plate# mentioned
+           // Claim request.
+
+           If plateNumber <> claimDs2.plateNumber;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Plate Num Mismatch in request';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Validate Garage Name.
+
+           If claimDs2.GarageAddress.garageName = *blanks;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Garage Name Missing';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Validate Garage Street .
+
+           If claimDs2.GarageAddress.streetdetail = *blanks;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Garage Street Name Missing';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Validate Garage City .
+
+           If claimDs2.GarageAddress.city = *blanks;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Garage City Name Missing';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Validate Garage Postal code .
+
+           If claimDs2.GarageAddress.postalCode = *blanks;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Garage Post Code Missing';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Validate Garage Postal code format . Length = 5.
+
+           If %len(%trim(claimDs2.GarageAddress.postalCode)) <> 5;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Invalid Post Code Format';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // If Reserve cost and Repair compensation is less than zero, reject.
+
+           If claimDs2.resrepairComp < 0 or claimDs2.reservCost < 0;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Invalid Repair Comp or Reserv Cost';
+              httpStatus = 400;
+              return;
+           ENDIF;
+
+           // Process claim request.
+           monitor;
+              exWS1000(§method: §0015: §returnCode: §user: §text: §uid: §tist:
+                       §wsdata);
+           on-error;
+              httpStatus = 503;
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = 'Failure in Claim Processing - +
+                                           Contact IVVR support';
+              return;
+           endmon;
+
+           if §returnCode <> *all' ';
+              httpStatus = %int(§returnCode);
+              httpHeaders(10) = §text;
+              responseData.plateNumber = plateNumber;
+              responseData.policyNumber = ' ';
+              responseData.claimNumber = ' ';
+              responseData.errorIndicator = 'Failure';
+              responseData.errorMessage = %trim(§text);
+              return;
+           endif;
+
+           claims_Date = claimData.claimDate;
+
+           // Get Local Server Name.
+           exec sql select HOST_NAME into :ivvr_LocServer
+                    from qsys2.SYSTEM_STATUS_INFO;
+
+           // Read IVVR data area to get Data lib name.
+           exec sql SELECT DATA_AREA_VALUE INTO :ivvr_Dtaara
+                   FROM TABLE(QSYS2.DATA_AREA_INFO(
+                        DATA_AREA_NAME => 'IVVRARA',
+                        DATA_AREA_LIBRARY => '*LIBL'));
+
+           §IVVR = ivvr_Dtaara;
+           ivvr_Dtalib = §§DTAL;     // Retrieve Data lib to read WSVERI.
+
+           // Get System Name(LPAR) if PROD/TEST/ENTW
+            exec sql SELECT DATA_AREA_VALUE INTO :ivvr_Sysname
+                   FROM TABLE(QSYS2.DATA_AREA_INFO(
+                        DATA_AREA_NAME => 'LPAR',
+                        DATA_AREA_LIBRARY => 'AIOITOOL'));
+
+            if ivvr_Sysname = 'PROD';
+               ivvr_RmtFile = 'WS1000RM' + 'P';
+            Else;
+               ivvr_RmtFile = 'WS1000RM' + 'T';
+            ENDIF;
+
+            // Get Remote location system name.
+
+            Exec Sql Select PFDQEE into :ivvr_RmtLoc from PFADEE
+                     where SYSTEE = :ivvr_RmtFile;
+
+           command = 'DLYJOB DLY(2)';
+           ExecClcmd(%trim(command): %len(%trim(command)));
+
+           //Estalish the remote connection.
+           exec sql connect to :ivvr_RmtLoc;
+           exec sql set current schema = :ivvr_Dtalib;       //Set library
+
+           // Sql to get status of the claim processing based in Uniq ID.
+           ///sqlString = 'Select STATRI, VTNRRI, SCNRRI, MSGDRI FROM ' +
+           ///          %trim(ivvr_Dtalib) + '.WSVERI ' +
+           ///          'WHERE UNIDRI = ' + quote + %trim(§uid) + quote;
+
+            sqlString = 'Select STATRI, VTNRRI, SCNRRI, SBFRRI, IDNRRI, -
+                        MSGDRI FROM WSVERI WHERE UNIDRI = ' + quote +
+                        %trim(§uid) + quote;
+
+           // Prepare Cursor.
+           Exec SQl prepare sqlStmt from :sqlString;
+
+           Exec Sql Declare wsveri_Rmt cursor for sqlStmt;
+           Exec SQL open wsveri_Rmt;
+           Exec Sql Fetch wsveri_Rmt into :ws_Status, :ws_contractNum,
+                                          :ws_claim_Num, :ws_VAT_Typ,
+                                          :ws_ErrNumber, :ws_message;
+
+           rmt_SQLstatus = SQLCODE;
+
+           //Close cursor.
+           Exec Sql Close wsveri_Rmt;
+
+           exec sql DISCONNECT :ivvr_RmtLoc;
+           exec sql connect reset;
+
+           If rmt_SQLstatus = 0;
+
+              select;
+              When ws_Status = '9';
+                   responseData.plateNumber = plateNumber;
+                   responseData.policyNumber = ws_contractNum;
+                   responseData.claimNumber = ws_claim_Num;
+                   responseData.vatType     = ws_VAT_Typ;
+                   responseData.errorIndicator = 'Succeess';
+                   responseData.errorMessage = 'Claim Process completed';
+
+              When ws_Status = '6';
+                   responseData.plateNumber = plateNumber;
+                   responseData.policyNumber = ' ';
+                   responseData.claimNumber = ' ';
+                   responseData.vatType     = ' ';
+                   responseData.errorIndicator = 'Failure';
+                   responseData.errorMessage = %trim(ws_message);
+                   httpStatus = 400;
+                   return;
+              Endsl;
+           Else;
+               responseData.plateNumber = plateNumber;
+               responseData.policyNumber = ' ';
+               responseData.claimNumber = ' ';
+               responseData.vatType     = ' ';
+               responseData.errorIndicator = 'Failure';
+               responseData.errorMessage = 'No Data for mentioned Plate Num';
+               httpStatus = 400;
+               return;
+           ENDIF;
+
+           httpStatus = 200;
+           return;
+
+     p addClaim        e
+

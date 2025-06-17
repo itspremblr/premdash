@@ -1,0 +1,267 @@
+**free
+    Ctl-opt Copyright('ANDIE Ismaning 2024') Option(*SrcStmt : *NoDebugIO)
+            datedit(*YMD) Bnddir('YAJL/YAJL')
+            DEBUG DECEDIT('0,') DftActgrp(*No) ActGrp(*Caller);
+
+    //------------------------------------------------------------------------
+    // Änderung    : CHG-2024-12-0013
+    // Description : Deletion of spool file based on retention period.
+    // Date       :  02.12.2024
+    // Programmer :  Premananda Dash
+    //------------------------------------------------------------------------
+
+     /Include YAJL/QRPGLESRC,yajl_h
+
+    Dcl-s errorMessage              varchar(500) inz;
+    Dcl-s docNode                   Like(yajl_val);
+    Dcl-s spoollist                 like(yajl_val);
+    Dcl-s node                      like(yajl_val);
+    Dcl-s val                       Like(yajl_val);
+    Dcl-s key                       varchar(50);
+
+    Dcl-S commandString             char(1000);
+    Dcl-S spoolFilename             varchar(10);
+    Dcl-S userIDInfo                varchar(10);
+    Dcl-S jobIDInfo                 varchar(28);
+    Dcl-S fileNumber                int(10);
+    Dcl-S sqlString                 varchar(1000);
+    Dcl-S quote                     char(1) Inz('''');
+    Dcl-S returnCode                int(10);
+    Dcl-s arrayLoopCounter          int(10);
+    Dcl-s objectLoopCounter         Int(10);
+
+    // Data Structure to hold spool file details.
+    Dcl-Ds spooldetail              qualified template Inz;
+           out_Queue                char(10);
+           user_data                char(10);
+           job_Name                 char(10);
+           spool_File_Name          char(10);
+           retention_period         char(10);
+    END-DS;
+
+    Dcl-Ds result                   qualified;
+           spoolList                likeds(spooldetail) dim(999);
+    End-Ds;
+
+    Dcl-Pr SystemCall               Int(10) extproc('system');
+           *n                       pointer value options(*String);
+    End-pr;
+
+    //*************************************************************************
+    // Main Processing.
+    //*************************************************************************
+
+    Exec sql set option commit = *none;
+
+    Monitor;
+
+    // Load spool Structure JSON from IFS into tree.
+    docNode = yajl_stmf_load_tree
+                   ('/HOME/BO_Tools/spoolfiles/spoolstruct.json':errorMessage);
+
+    // If Error while loading , capture error.
+    If errorMessage = ' ';
+
+      // Point to Node spooldetail from JSON file.
+      spoolList = YAJL_object_find(docNode: 'spoollist');
+
+      Clear arrayLoopCounter;
+
+      // Node contains the array element under node spoolList
+      Dow YAJL_ARRAY_LOOP(spoolList: arrayLoopCounter: node);
+          Clear objectLoopCounter;
+
+          Dow YAJL_OBJECT_LOOP(node: objectLoopCounter: key: val);
+
+              // When load_spoolDetail will run, "Key" will contains
+              // JSON field name and "val" will contain a YAJL node from
+              // which the value can be extracted.
+
+              load_spoolDetail();
+
+          ENDDO;
+      ENDDO;
+    Else;
+       snd-msg 'ERROR: in reading JSON file. ';
+    ENDIF;
+
+    yajl_tree_free(docNode);
+
+    // Delete spool file.
+
+    delete_spoolDetail();
+
+    On-Error *all;
+       Dump;
+    Endmon;
+
+    *inlr = *on;
+
+    //************************************************
+    //  Load spool Details into Array .
+    //************************************************
+
+    Dcl-Proc load_spoolDetail;
+
+             Select %trim(key);
+
+             When-is 'outputqueue';
+                     result.spoolList(arrayLoopCounter).out_Queue =
+                                 yajl_get_string(val);
+
+             When-is 'userdata';
+                     result.spoolList(arrayLoopCounter).user_data =
+                                 yajl_get_string(val);
+
+             When-is 'jobname';
+                     result.spoolList(arrayLoopCounter).job_Name =
+                                 yajl_get_string(val);
+
+             When-is 'spoolfilename';
+                     result.spoolList(arrayLoopCounter).spool_File_Name =
+                                 yajl_get_string(val);
+
+             When-is 'retentionperiod';
+                     result.spoolList(arrayLoopCounter).retention_period =
+                                 yajl_get_string(val);
+             Endsl;
+
+    END-PROC;
+
+    //************************************************
+    // Delete Spool file based on retention period.
+    //************************************************
+
+    Dcl-Proc delete_spoolDetail;
+
+        Clear arrayLoopCounter;
+
+        For arrayLoopCounter =  1 to YAJL_ARRAY_SIZE(spoolList);
+
+            buildSqlString();
+
+            // Prepare Cursor.
+            Exec SQl prepare sqlStmt from :sqlString;
+
+            // Declare cursor;
+            Exec Sql Declare spool_Cursor scroll cursor for sqlStmt;
+
+            // Open cursor.
+            Exec Sql open spool_Cursor;
+
+            //fetch first row.
+            Exec Sql fetch first from spool_Cursor into  :spoolFilename,
+                                                         :userIDInfo,
+                                                         :jobIDInfo,
+                                                         :fileNumber ;
+
+            Dow Sqlcode = 0;
+
+                commandString = 'DLTSPLF FILE(' + %trim(spoolFilename) +
+                                ') JOB(' + %trim(jobIDInfo) + ')  SPLNBR(' +
+                             %char(fileNumber) +')';
+
+                returnCode = systemCall(%trim(commandstring));
+
+                if returnCode <> 0;
+                   snd-msg 'ERROR: in deleting spool file for job ' +
+                            %trim(jobIDInfo);
+                ENDIF;
+
+                Exec Sql Fetch next from spool_Cursor into :spoolFilename,
+                                                           :userIDInfo,
+                                                           :jobIDInfo,
+                                                           :fileNumber;
+            ENDDO;
+
+            //Close spool cursor.
+            Exec sql close spool_Cursor;
+
+        ENDFOR;
+
+    End-Proc;
+
+    //************************************************
+    // Build Sql String
+    //************************************************
+
+    Dcl-Proc buildSqlString;
+
+            Select;
+
+              // Build string if outq, user data, job name is specified.
+
+              When result.spoolList(arrayLoopCounter).out_Queue <> ' ' and
+                   result.spoolList(arrayLoopCounter).user_data <> ' ' and
+                   result.spoolList(arrayLoopCounter).job_Name <> ' ';
+
+                  sqlstring = 'Select SPOOLED_FILE_NAME, USER_NAME, JOB_NAME, -
+                         FILE_NUMBER from '                                  +
+                         'QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC '                 +
+                         'WHERE JOB_NAME LIKE ' + quote + '%'                +
+                         %trim(result.spoolList(arrayLoopCounter).job_Name)  +
+                         '%' + quote + ' and OUTPUT_QUEUE_NAME = ' + quote   +
+                         %trim(result.spoolList(arrayLoopCounter).out_Queue) +
+                         quote + ' and USER_DATA LIKE ' + quote + '%' +
+                         %trim(result.spoolList(arrayLoopCounter).user_Data) +
+                         '%' + quote +
+                          ' and CREATE_TIMESTAMP <= CURRENT_TIMESTAMP - ' +
+                            %trim(result.spoolList(arrayLoopCounter).
+                                  retention_period);
+
+              // Build string if job name, outq , spool file name is specified.
+
+              When result.spoolList(arrayLoopCounter).job_Name <> ' ' and
+                   result.spoolList(arrayLoopCounter).out_Queue <> ' ' and
+                   result.spoolList(arrayLoopCounter).spool_File_Name <> ' ';
+
+                   sqlstring = 'Select SPOOLED_FILE_NAME, USER_NAME, JOB_NAME, -
+                                FILE_NUMBER from '                           +
+                                'QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC '          +
+                                'WHERE JOB_NAME LIKE ' + quote + '%'         +
+                               %trim(result.spoolList(arrayLoopCounter).
+                                     job_Name)                               +
+                               '%' + quote + ' and OUTPUT_QUEUE_NAME = '     +
+                                     quote                                   +
+                               %trim(result.spoolList(arrayLoopCounter).
+                                     out_Queue) + quote                      +
+                             ' and SPOOLED_FILE_NAME = ' + quote             +
+                             %trim(result.spoolList(arrayLoopCounter).
+                                     spool_File_Name) + quote                +
+                             ' and CREATE_TIMESTAMP <= CURRENT_TIMESTAMP - ' +
+                                %trim(result.spoolList(arrayLoopCounter).
+                                      retention_period);
+
+              // Build string if job name, outq is specified.
+
+              When result.spoolList(arrayLoopCounter).job_Name <> ' ' and
+                   result.spoolList(arrayLoopCounter).out_Queue <> ' ';
+
+                   sqlstring = 'Select SPOOLED_FILE_NAME, USER_NAME, JOB_NAME, -
+                                FILE_NUMBER from '                           +
+                                'QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC '          +
+                                'WHERE JOB_NAME LIKE ' + quote + '%'         +
+                               %trim(result.spoolList(arrayLoopCounter).
+                                     job_Name)                               +
+                               '%' + quote + ' and OUTPUT_QUEUE_NAME = '     +
+                                     quote                                   +
+                               %trim(result.spoolList(arrayLoopCounter).
+                                     out_Queue) + quote                      +
+                             ' and CREATE_TIMESTAMP <= CURRENT_TIMESTAMP - ' +
+                                %trim(result.spoolList(arrayLoopCounter).
+                                      retention_period);
+
+              // Build string if user data is specified.
+              When result.spoolList(arrayLoopCounter).user_data <> ' ' ;
+                   sqlstring = 'Select SPOOLED_FILE_NAME, USER_NAME, -
+                                JOB_NAME, FILE_NUMBER from '                 +
+                                'QSYS2.OUTPUT_QUEUE_ENTRIES_BASIC '          +
+                                'WHERE USER_DATA LIKE '                      +
+                                quote +
+                           %trim(result.spoolList(arrayLoopCounter).user_data)+
+                          '%' + quote                                        +
+                          ' and CREATE_TIMESTAMP <= CURRENT_TIMESTAMP - '    +
+                        %trim(result.spoolList(arrayLoopCounter).
+                              retention_period);
+            ENDSL;
+    END-PROC;

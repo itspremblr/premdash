@@ -1,0 +1,888 @@
+**free
+        ctl-opt DftActGrp(*no) debug(*yes) datedit(*dmy/) DECEDIT('0,')
+                option(*nodebugio:*srcstmt);
+      // H DEBUG DECEDIT('0,') DATEDIT(*DMY/)
+      //
+      // EINLESEN DER RISIKEN TAP VON VRSTIM NACH VRSTAP
+      //
+      //   Z = ZÄHLER IN KENNZEICHEN AUFBEREITUNG
+      //   Y = ZÄHLER IN KENNZEICHEN AUFBEREITUNG
+      //  §X = ZÄHLER FÜR UPDATE VRSTAP
+      //  §Y = ZÄHLER FÜR BEGRENZUNG VRSTAP
+      //  §Z = ZÄHLER FÜR LOGUP AUF FELDGRUPPE FIN
+      //
+      //-------------------------------------------------------------------------
+      // DATUM: 08.12.2023    Premananda Dash          CHG-2023-12-0032
+      //        Fix Array out of Seq failue for no risk contract.
+      //-------------------------------------------------------------------------
+      // DATUM: 26.07.2023    Premananda Dash          CHG-2023-07-0039
+      //        Conversion from RPG to RPGLE
+      //        convert fixed array to dynamic array.
+      //-------------------------------------------------------------------------
+      // DATUM: 17.03.2017    Lilo Solbach             CHG-2017-03-0024
+      //        KFZ-Kennzeichen immer Großbuchstaben
+      //-------------------------------------------------------------------------
+      // DATUM: 03.03.2016    PETER SPEER              CHG-2016-03-0004
+      //        FIN IN DIE MESSAGE-ID
+      //-------------------------------------------------------------------------
+      // DATUM: 23.02.2016    PETER SPEER              CHG-2016-02-0025
+      //        AUCH UPDATE ERLAUBEN, WENN SICH MFSF ÄNDERT
+      //-------------------------------------------------------------------------
+      // DATUM: 05.01.2016    PETER SPEER              CHG-2016-01-0002
+      //        PRÜFUNG KENNZEICHEN ERWEITERT
+      //-------------------------------------------------------------------------
+      // DATUM: 14.04.2015    PETER SPEER              CHG-2015-01-0051
+      //        AGENTURNUMMER BEFÜLLUNGSLOGIK ERWEITERN
+      //-------------------------------------------------------------------------
+      // DATUM: 27.03.2015    PETER SPEER              CHG-2015-01-0051
+      //        AGENTURNUMMER BEI FA00 = 5 FÜLLEN
+      //-------------------------------------------------------------------------
+      // DATUM: 25.04.2015    PETER SPEER              CHG-2015-02-0029
+      //        FAHRZEUGART LEER BEI TAP UND FLOTTE
+      //-------------------------------------------------------------------------
+      // DATUM: 05.12.2014    PETER SPEER              CHG-2014-12-0003
+      //        DOUBLETTENPRÜFUNG FIN
+      //-------------------------------------------------------------------------
+      // DATUM: 10.07.2014    PETER SPEER              CHG-2014-06-0039
+      //        NEUERSTELLUNG
+      //-------------------------------------------------------------------------
+      //
+      //
+
+      //FVRSTIM    IF   E           K DISK
+        dcl-f VRSTIM   usage(*input) keyed;
+      //FADRSAD    IF   E           K DISK
+        dcl-f ADRSAD   usage(*input) keyed;
+      //FFIRMFA    IF   E           K DISK
+        dcl-f FIRMFA   usage(*input) keyed;
+      //FPLZ0PLL2  IF   E           K DISK
+        dcl-f PLZ0PLL2 usage(*input) keyed;
+      //FIPIFWRL1  IF   E           K DISK
+        dcl-f IPIFWRL1 usage(*input) keyed;
+      //FVRSTAP    UF A E           K DISK
+        dcl-f VRSTAP   usage(*output:*update) keyed;
+      //FVTRHVV    IF   E           K DISK
+        dcl-f VTRHVV   usage(*input) keyed;
+      //FDOSVG2    O  A E           K DISK
+        dcl-f DOSVG2   usage(*output) keyed;
+      //FVRST75    O  A E           K DISK
+      //F                                     RENAME(VRSTAPR:VRSTAP1)
+        dcl-f VRST75   usage(*output) keyed
+                       rename(VRSTAPR:VRSTAP1);
+      //FVT1065P0  O    E             PRINTER OFLIND(*IN10)
+        dcl-f VT1065P0  printer  oflind(*in10);
+
+     //D §KFZ            S              1    DIM(12)           * KENNZEICHEN
+     //D §KZ1            S              1    DIM(3)            * KREIS
+     //D §KZ2            S              1    DIM(2)            * BUCHSTABEN
+     //D §KZ3            S              1    DIM(4)            * ZAHLEN
+
+        dcl-s §KFZ          char(1) Dim(12);                     // KENNZEICHEN
+        dcl-s §KZ1          char(1) Dim(3);                      // KREIS
+        dcl-s §KZ2          char(1) Dim(2);                      // BUCHSTABEN
+        dcl-s §KZ3          char(1) Dim(4);                      // ZAHLEN
+
+     //* FIN
+     //D FIN             S             18    DIM(7500)
+     //D MFS             S              1    DIM(7500)
+     //D KEN             S             12    DIM(7500)
+     // FIN
+
+        Dcl-S FIN            CHAR(18)  DIM(*AUTO:400000);
+        Dcl-S MFS            CHAR(1)   DIM(*AUTO:400000);
+        Dcl-S KEN            CHAR(12)  DIM(*AUTO:400000);
+
+     //* LISTE DERER DIE UPZUDATEN SIND STATT NEU ZU SCHREIBEN
+     //D UPD             S             18    DIM(7500)
+        Dcl-S UPD            CHAR(18)  DIM(*Auto:400000);
+     //* LISTE DERER DIE ZU BEGRENZEN SIND
+     //D BEG             S             35    DIM(7500)
+        Dcl-S BEG            CHAR(35)  DIM(*Auto:400000);
+     //*
+     //* SCHALTER FÜR 10 *IN POSITIONEN LEER MACHEN
+     //D ##I             S              1    DIM(10)
+     // Dcl-S ##I            CHAR(1)   DIM(10);
+
+        Dcl-S ArrCount        packed(5) Inz(1);
+        Dcl-S NumPos          packed(1) Inz(0);
+        Dcl-S §Z              Packed(4) Inz(0);
+        Dcl-S X               packed(2) Inz(0);
+        Dcl-S Y               packed(2) Inz(0);
+        Dcl-S XZ              packed(2) Inz(0);
+        Dcl-S Z               packed(5) Inz(0);
+        Dcl-S §X              packed(4) Inz(0);
+        Dcl-S §Y              packed(4) Inz(0);
+        Dcl-S §ERG            packed(2) Inz(0);
+        Dcl-S §BU             Zoned(1) Inz(0);
+        Dcl-S §BUCH           Char(3);
+        Dcl-S §TST            Char(1);
+        Dcl-S A1              Char(1);
+        Dcl-S §GDVN           Char(4);
+        Dcl-S §ZAHL4          Char(4);
+        Dcl-S §ZAH1           Char(1);
+        Dcl-S §ZAH2           Char(2);
+        Dcl-S §ZAH3           Char(3);
+        Dcl-S §K2             Char(2);
+        Dcl-S §FLENK          packed(1);
+        Dcl-S §FRSKN          like(RSKNAP);
+        Dcl-S §STR0           Char(30);
+        Dcl-S $STR            Char(30);
+        Dcl-S $HNR            Char(4);
+        Dcl-S $ZNR            Char(10);
+        Dcl-S §LIB            Char(3);
+        Dcl-S §SUCHB          Char(35);
+        Dcl-S §VT5            Char(5);
+        Dcl-S §arraySeq       packed(5) inz(0);
+        Dcl-S ErrorMessage    char(512);
+        Dcl-S command         varchar(512);
+        Dcl-S comma           char(1) inz('''');
+
+     //*
+     //***************************************************************
+     //* für Umsetzung Klein- nach Großbuchstaben                    *
+     //***************************************************************
+     //D §GR             C                   CONST('ABCDEFGHIJKLMNOPQRS-
+     //D                                     TUVWXYZÄÖÜ')
+        Dcl-C §GR  'ABCDEFGHIJKLMNOPQRSTUVWXYZÄÖÜ';
+     //D §KL             C                   CONST('abcdefghijklmnopqrs-
+     //D                                     tuvwxyzäöü')
+        Dcl-C §KL  'abcdefghijklmnopqrstuvwxyzäöü';
+        Dcl-C Array_Invalid_Index 00121;
+        Dcl-C Array_outof_Index   00124;
+     //*
+     //***************************************************************
+     //* DATENSTRUKTUR FÜR DATUM                                     *
+     //***************************************************************
+     //D                 DS
+     //D  $DATUM                 1      8  0
+     //D  $TT                    1      2  0
+     //D  $MM                    3      4  0
+     //D  $JHJJ                  5      8  0
+        Dcl-Ds *N;
+               $DATUM Zoned(8);
+               $TT    Zoned(2) Pos(1);
+               $MM    Zoned(2) Pos(3);
+               $JHJJ  Zoned(4) Pos(5);
+        END-DS;
+     //*
+     //D                 DS
+     //D  $KENN                  1      9
+     //D  $KREIS                 1      3
+     //D  $BUCH                  4      5
+     //D  $ZAHL                  6      9
+     //*
+        Dcl-Ds *N;
+               $KENN  Char(9);
+               $KREIS Char(3) Pos(1);
+               $BUCH  Char(2) Pos(4);
+               $ZAHL  Char(4) Pos(6);
+        END-DS;
+
+     //D §CON1           C                   CONST('VU_GDV_002')
+        Dcl-C §CON1  'VU_GDV_002';
+
+        Dcl-Pr TL1205RB Extpgm;
+               *N       Char(30);
+               *N       Char(30);
+               *N       Char(4);
+               *N       Char(10);
+        END-PR;
+        Dcl-Pr TL1202CB Extpgm;
+               *N       Char(25);
+        END-PR;
+
+      // procedure to call CL program
+        Dcl-Pr ExecClCmd Extpgm('QCMDEXC');
+               *N      Char(512)  options(*varsize) const;
+               *N      Packed(15:5) const;
+        END-PR;
+
+     //*
+     //***************************************************************
+     //* COPYSTRECKEN                                                *
+     //***************************************************************
+     //*
+     //* COPY-STRECKE FÜR STANDARD DATA-AREA
+     //D/COPY CPYLE,PPIVVRINPI
+       /COPY CPYLE,PPIVVRINPI
+     // Program Status Data Structure.
+       /COPY CPYLE,PPIVVRPSDS
+
+     //C     *ENTRY        PLIST
+     //C                   PARM                    §IVVR
+     //C                   PARM                    Import_Error            1 0
+        Dcl-PI *n;
+               IVVR_Ds likeds(§IVVR);
+               Import_Error packed(1:0);
+        END-PI;
+     //*
+     //C*                  CLEAR                   FIN
+     //C*                  CLEAR                   MFS
+     //C*                  CLEAR                   KEN
+     //C                   CLEAR                   UPD
+     //C                   CLEAR                   BEG
+           monitor;
+
+           Exec sql set option commit = *none;
+           Exsr Init;
+
+           Import_Error = 0;
+
+           // Set no.of element for array.
+           %elem(FIN) = 0;
+           %elem(MFS) = 0;
+           %elem(KEN) = 0;
+           %elem(UPD) = 0;
+           %elem(BEG) = 0;
+
+           Clear FIN;
+           Clear MFS;
+           Clear KEN;
+           Clear UPD;
+           Clear BEG;
+
+     // Load total number of plate# available under a contract.
+
+           Z = 0;
+           *in50 = *off;
+           VTNRAP = IVVR_Ds.§§VTNR;
+           Setll (IVVR_Ds.§§FA00:IVVR_Ds.§§VTNR) VRSTAP;
+           if %found(VRSTAP);
+              Reade (IVVR_Ds.§§FA00:IVVR_Ds.§§VTNR) VRSTAP;
+              Dow not %Eof(VRSTAP);
+                  FIN(*next) = KFZIAP;
+                  MFS(*next) = MFSFAP;
+                  KEN(*next) = KAKZAP;
+                  Reade (IVVR_Ds.§§FA00:IVVR_Ds.§§VTNR) VRSTAP;
+              ENDDO;
+           ENDIF;
+
+           Exsr  §CHECK;
+
+           If  Import_Error = 0;
+               Exsr §WRITE;
+           // GEMERKTE BEGRENZEN
+               Exsr §BEGR;
+           Endif;
+
+          // Error handling section.
+           On-error *FILE;
+              ErrorMessage = 'Fehler bei Datei-Update / Lesen. Kontakt zum -
+                              IVVR-Support';
+
+              command = %trim (('SNDBRKMSG MSG(' + comma + %Trim(ErrorMessage)+
+                       comma + ') TOMSGQ(' + PGM.JOBNAME + ')'));
+
+              ExecClcmd(%trim(command): %len(%trim(command)));
+              Import_Error = 1;
+              return;
+
+           // Array out of Index error;
+           On-Error Array_outof_Index;
+              ErrorMessage = 'Die Gesamtzahl der Risiko Num von Excel hat den'+
+                             ' Grenzwert uber schritten. Prozess gestoppt.';
+
+              command = %trim (('SNDBRKMSG MSG(' + comma + %Trim(ErrorMessage)+
+                       comma + ') TOMSGQ(' + PGM.JOBNAME + ')'));
+
+              ExecClcmd(%trim(command): %len(%trim(command)));
+              Import_Error = 1;
+              return;
+
+           // Array Index error;
+           On-Error Array_Invalid_Index;
+              ErrorMessage = 'Array-Index ungültig. Prozess gestoppt.';
+
+              command = %trim (('SNDBRKMSG MSG(' + comma + %Trim(ErrorMessage)+
+                       comma + ') TOMSGQ(' + PGM.JOBNAME + ')'));
+
+              ExecClcmd(%trim(command): %len(%trim(command)));
+              Import_Error = 1;
+              return;
+           //All other Eror.
+           On-Error;
+
+              ErrorMessage = 'Fehler im Programm. Kontakt zum IVVR-Support';
+
+              command = ('SNDBRKMSG MSG(' + comma + %Trim(ErrorMessage) + comma
+                        + ') TOMSGQ(' + PGM.JOBNAME + ')');
+
+              ExecClcmd(%trim(command): %len(%trim(command)));
+              Import_Error = 1;
+              return;
+           Endmon;
+
+           *inlr = *on;
+
+     //***********************************************************
+     // Initialise Sub-routine.                                                    *
+     // ***********************************************************
+            Begsr Init;
+                  If  IVVR_Ds.§§SPR1 = *Blanks;
+                      TLCDIF = 'D';
+                  Else;
+                      TLCDIF = IVVR_Ds.§§SPR1;
+                  ENDIF;
+
+                Chain (IVVR_Ds.§§FA00)  FIRMFA;
+                If %found(FIRMFA);
+                   §GDVN = GDVNFA;
+                ENDIF;
+            ENDSR;
+     //***********************************************************
+     //* EINGEHENDE DATEN PRÜFEN                                 *
+     //***********************************************************
+            Begsr §CHECK;
+                  Setll *loval VRSTIM;
+                  Read  VRSTIM;
+                  If %Eof(VRSTIM);
+                     Import_Error = 1;
+                     *in55 = *on;
+                     leavesr;
+                  ENDIF;
+
+                  §Y = 1;
+                  §X = 1;
+
+                  Dow Not %Eof(VRSTIM);
+                      // PFLICHTFLEDER NICHT LEER
+                      if KAKZIM = *blanks or KFZIIM = *blanks and
+                         KAKAIM <> '7';
+                         Import_Error = 1;
+                         *IN52 = *ON;
+                         Write kopf;
+                         Write pos;
+                      ENDIF;
+
+                      KAKZIM = %Xlate(§KL:§GR:KAKZIM);
+                      // ES MUSS EIN - ODER _ IM KENNZEICHEN SEIN
+                      §ERG = 0;
+                      §ERG = %Scan('-':KAKZIM);
+                      If §ERG = 0;
+                         §ERG = %Scan('_':KAKZIM);
+                         If §ERG = 0;
+                            Import_Error = 1;
+                            *in56 = *On;
+                            Write Kopf;
+                            Write POs;
+                         ENDIF;
+                      ENDIF;
+                      // KREIS MAX 3 ZEICHEN, DAHER - SPÄTESTENS AUF STELLE 4
+                      If §ERG > 4;
+                         Import_Error = 1;
+                         *in53 = *on;
+                         Write Kopf;
+                         Write POs;
+                      ENDIF;
+
+                      // MAXIMAL 2 BUCHSTABEN
+                      Clear §BUCH;
+                      §BU =  §ERG + 1;
+                      §BUCH = %subst(KAKZIM:§BU:3);
+                      EvalR §TST = §BUCH;
+                      if §TST <> *blanks;
+                        NumPos = %check('0123456789':§TST);
+                        If NumPos <> *zeros;
+                           Import_Error = 1;
+                           *in54 = *on;
+                           Write KOPF;
+                           Write POS;
+                        endif;
+                      endif;
+
+                      // DOUBLETTENPRÜFUNG AUF FIN
+                      If KFZIIM <> *blanks and %Elem(FIN) <> *zeros;
+                         §Z = 1;
+
+                         §arraySeq = %lookup(KFZIIM:FIN:§Z);
+
+                         If §arraySeq <> *zeros;
+                            Exsr §AUFKZ;
+                            If MFS(§arraySeq) = *blanks;
+                               MFS(§arraySeq) = '0';
+                            Endif;
+
+                            if KEN(§arraySeq) = KAKZAP and MFS(§arraySeq) = MFSFIM;
+                               Import_Error = 5;
+                               *in50 = *on;
+                               WRITE     KOPF;
+                               WRITE     POS;
+                              // WENN KENNZEICHEN GLEICH, DANN NUR MFSF UPDATEN
+                            Elseif KEN(§arraySeq)  = KAKZAP;
+                                   UPD(*next) = KFZIIM;
+                                   §X += 1;
+                                Else;
+                                   BEG(*next) = %trim(KFZIIM) + ' ' + KEN(§arraySeq);
+                                   §Y += 1;
+                            endif;
+                         Endif;
+                      Endif;
+                      Read  VRSTIM;
+                  ENDDO;
+            ENDSR;
+
+      //***********************************************************
+      //* KENNZEICHEN AUFBEREITEN
+      //***********************************************************
+            Begsr  §AUFKZ;
+
+                   Clear §KFZ;
+                   Clear §KZ1;
+                   Clear §KZ2;
+                   Clear §KZ3;
+                   Clear $KENN;
+
+                   For  ArrCount = 1 to %len(KAKZIM);
+                        §KFZ(ArrCount) = %subst(KAKZIM:ArrCount:1);
+                   Endfor;
+
+                  X = 1;
+                  Y = 1;
+                  §FLENK = 3;
+               // KREIS
+                  Dow X <= 10;
+                      If  §KFZ(X) = *Blanks or
+                          §KFZ(X) = '-' or
+                          §KFZ(X) = '_';
+                          Leave;
+                      ENDIF;
+
+                      If Y <= §FLENK;
+                         §KZ1(Y)= §KFZ(X);
+                      ENDIF;
+
+                      X += 1;
+                      Y += 1;
+                  Enddo;
+
+             // BUCHSTABEN
+                  Y = 1;
+                  Dow X <= 12;
+                      X += 1;
+                      If §KFZ(X) < 'a' or
+                         §KFZ(X) > 'Z';
+                         Leave;
+                      ENDIF;
+
+                      §KZ2(Y) = §KFZ(X);
+                      Y += 1;
+                  ENDDO;
+             // ZIFFERN
+
+                  X = X - 1;
+                  Y = 1;
+                  XZ = 0;
+                  Dow X <= 11;
+                      X += 1;
+                      //SONDERZEICHEN NICHT VERARBEITEN
+                      A1 = §KFZ(X);
+                      If A1 >= '0' AND
+                         A1 <= '9';
+                         §KZ3(Y) = §KFZ(X);
+                         Y += 1;
+                         XZ += 1;
+                      ENDIF;
+                  ENDDO;
+
+                  For  ArrCount = 1 to %len($KREIS);
+                       %subst($KREIS:ArrCount:1) = §KZ1(ArrCount);
+                  Endfor;
+
+                  For  ArrCount = 1 to %len($BUCH);
+                       %subst($BUCH:ArrCount:1) = §KZ2(ArrCount);
+                  Endfor;
+                  Clear §ZAHL4;
+
+                  Select;
+                  When (XZ<2);
+                       For  ArrCount = 1 to %len(§ZAH1);
+                            %subst(§ZAH1:ArrCount:1) = §KZ3(ArrCount);
+                       Endfor;
+
+                       EvalR $ZAHL = §ZAH1;
+                       §ZAHL4 = §ZAH1;
+
+                  When (XZ < 3);
+                       For  ArrCount = 1 to %len(§ZAH2);
+                            %subst(§ZAH2:ArrCount:1) = §KZ3(ArrCount);
+                       Endfor;
+
+                       EvalR $ZAHL = §ZAH2;
+                       §ZAHL4 = §ZAH2;
+
+                  When (XZ < 4);
+                       For  ArrCount = 1 to %len(§ZAH3);
+                            %subst(§ZAH3:ArrCount:1) = §KZ3(ArrCount);
+                       Endfor;
+
+                       EvalR $ZAHL = §ZAH3;
+                     //$ZAHL = %replace(§ZAH3:$ZAHL:%len($ZAHL)-%len(§ZAH3) + 1);
+                       §ZAHL4 = §ZAH3;
+
+                  Other;
+                       For  ArrCount = 1 to %len($ZAHL);
+                            %subst($ZAHL:ArrCount:1) = §KZ3(ArrCount);
+                       Endfor;
+                       §ZAHL4 = $ZAHL;
+                  ENDSL;
+
+                  KAKZIM = $KENN;
+
+         // KAKZIM IM FORMAT 3X KREIS 2XBUCHSTABE 4XZAHL AN FIXEN STELLEN
+         // DAUHK1234
+         // D  HK  34
+         // KLEH  123
+         // DIES IST SO AUCH FÜR DIE DOSVG2 EVB GEWÜNSCHT.
+         // IN DER VRSTAP MUSS ES ABER IVVR KONFORM SEIN (FÜR SUCHE Z. B.)
+         // DAU-HK 1234
+         // D-HK 34
+         // KLE-H 123
+               clear KAKZAP;
+               For  ArrCount = 1 to %elem(§KZ1);
+                    %subst(KAKZAP:ArrCount:1) = §KZ1(ArrCount);
+               Endfor;
+
+               KAKZAP = %trim(KAKZAP) + '-';
+
+               For  ArrCount = 1 to %elem(§KZ2);
+                    %subst(§K2:ArrCount:1) = §KZ2(ArrCount);
+               Endfor;
+
+               KAKZAP = %trim(KAKZAP) + §K2;
+               KAKZAP = %trim(KAKZAP) + ' ' + §ZAHL4;
+
+            ENDSR;
+
+      //***********************************************************
+      // Write into VRSTAP                                        *
+      //***********************************************************
+            Begsr §WRITE;
+
+                  Setgt (IVVR_Ds.§§FA00:IVVR_Ds.§§VTNR) VRSTAP;
+                  If %found(VRSTAP);
+                     Readpe (IVVR_Ds.§§FA00:IVVR_Ds.§§VTNR) VRSTAP;
+                     if not %eof(VRSTAP);
+                        §FRSKN = RSKNAP;
+                     ENDIF;
+                  ENDIF;
+
+                  Setll *loval VRSTIM;
+                  Read VRSTIM;
+                  Dow not %eof(VRSTIM);
+                      clear VRSTAPR;
+
+                      //WENN FIN UND KAKZ VORHANDEN ABER DIE NUTZUNGSART ANDERS,
+                      // DANN KEIN NEUES RISIKO ANLEGEN, SONDERN ALTES BEGRENZEN
+
+                      Z =  1;
+
+                      // §arraySeq2 = %lookup(KFZIIM:UPD:Z);
+
+                      If %Elem(UPD) <> *zeros;
+                         Exsr §UPDA;
+                         //  AUSGABE DOSVG2 FÜR EVBÜ
+                         If KAKAIM <> '7';
+                            Exsr §DOSVG;
+                         ENDIF;
+                         Read VRSTIM;
+                         iter;
+                      ENDIF;
+
+                      //KENNZEICHEN AUFBEREITEN UND ÜBERTRAGEN
+                      KAKZIM = %Xlate(§KL:§GR:KAKZIM);
+                      If KAKAIM = '2';
+                         Exsr §AUFKZ;
+                      Else;
+                         KAKZIM = %Xlate('-':' ':KAKZIM);
+                         KAKZAP = KAKZIM;
+                      ENDIF;
+
+                      §FRSKN += 1;
+                      RSKNAP = §FRSKN;
+                      FA00AP = IVVR_Ds.§§FA00;
+                      VTNRAP = IVVR_Ds.§§VTNR;
+
+                      KAKAAP = KAKAIM;
+                      GTVOAP = IVVR_Ds.§§AEBG;
+                      GTBIAP = *zeros;
+                      KFZIAP = KFZIIM;
+
+                      If MFSFIM = *blanks;
+                         MFSFAP = '0';
+                      Else;
+                         MFSFAP = MFSFIM;
+                      ENDIF;
+                      ARVNAP = IVVR_Ds.§§ARVN;
+                      VNNRAP = IVVR_Ds.§§VNNR;
+                      // VERSICHERUNGSBEGINN 15012014 --> 20140115
+                      $DATUM = VTBGIM;
+                      VTBGAP = %dec(%Editc($JHJJ:'X') +
+                                    %Editc($MM:'X')   +
+                                    %Editc($TT:'X'):8:0) ;
+
+                      // VERSICHERUNGSABLAUF 15012014 --> 20140115
+                      $DATUM = VTABIM;
+                      VTABAP = %Dec(%Editc($JHJJ:'X') +
+                                    %Editc($MM:'X')   +
+                                    %Editc($TT:'X'):8:0) ;
+                      EVBNAP = EVBNIM;
+                      AENRAP = IVVR_Ds.§§AENR;
+                      ANUSAP = IVVR_Ds.§§PGUS;
+                      ANDTAP = IVVR_Ds.§§SYJH;
+                      ANDTAP = IVVR_Ds.§§SYD1;
+
+                      Write  VRSTAPR;
+                      // AUSGABE DES LOGSATZES
+
+                      AENLAP = AENRAP;
+                      KZNOAP = 'N';
+
+                      Write  VRSTAP1;
+                      If KAKAIM <> '7';
+                            Exsr §DOSVG;
+                      Endif;
+
+                      Read VRSTIM;
+                  ENDDO;
+            ENDSR;
+      //***********************************************************
+      // UPDATE DER VRSTAP                                        *
+      //***********************************************************
+
+            Begsr §UPDA;
+
+                  Setgt (IVVR_Ds.§§FA00:IVVR_Ds.§§VTNR) VRSTAP;
+                  If %found(VRSTAP);
+                     Readpe (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VRSTAP;
+                     Dow not %eof(VRSTAP);
+                         If KFZIIM = KFZIAP and
+                            GTBIAP = 0 or
+                            KFZIIM = KFZIAP and
+                            GTBIAP > IVVR_Ds.§§AEBG;
+                            If MFSFIM = *blanks;
+                               MFSFIM = '0';
+                            ENDIF;
+
+                            // AUSGABE DES LOGSATZES
+                            AENLAP = IVVR_Ds.§§AENR;
+                            KZNOAP = '0';
+                            Write VRSTAP1;
+
+                            //BEGRENZEN DES ALTEN SATZES
+
+                            GTBIAP = IVVR_Ds.§§AEBG;
+                            AEUSAP = 'VT1065RB';
+                            AENRAP = IVVR_Ds.§§AENR;
+                            AENLAP = 0;
+                            KZNOAP = *blanks;
+
+                            Update VRSTAPR;
+
+                            if IVVR_Ds.§§AEBG = GTBIAP;
+                               LFDNAP += 1;
+                            Else;
+                               LFDNAP = 1;
+                            ENDIF;
+
+                            AEUSAP = *Blanks;
+                            AEDTAP = 0;
+                            AENLAP = 0;
+                            GTBIAP = 0;
+                            GTVOAP = IVVR_Ds.§§AEBG;
+                            AENRAP = IVVR_Ds.§§AENR;
+                            ANUSAP = IVVR_Ds.§§PGUS;
+                            ANDTAP = IVVR_Ds.§§SYJH + IVVR_Ds.§§SYD1;
+                            MFSFAP = MFSFIM;
+
+                            Write VRSTAPR;
+
+                            // AUSGABE DES LOGSATZES FÜR VGAR 29
+                            AENLAP = AENRAP;
+                            KZNOAP = 'N';
+
+                            Write VRSTAP1;
+                            Leave;
+                          Endif;
+                          Readpe (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VRSTAP;
+                     Enddo;
+                  ENDIF;
+            ENDSR;
+
+      //***********************************************************
+      // BEGRENZEN DER VRSTAP-SÄTZE                               *
+      //***********************************************************
+
+            Begsr §BEGR;
+
+              If %Elem(BEG) <> *zeros;
+                   §Y = 1;
+
+                   //Dow BEG(§Y) <> *blanks;
+                   Dow §Y <= %Elem(BEG);
+                   Setgt (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VRSTAP;
+                      If %found(VRSTAP);
+                         Readpe (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VRSTAP;
+                         Dow not %eof(VRSTAP);
+                             §SUCHB = %trim(KFZIAP) + ' ' + %trim(KAKZAP);
+
+                             If §SUCHB = BEG(§Y) and
+                                GTBIAP = 0 or
+                                §SUCHB = BEG(§Y) and
+                                GTBIAP = IVVR_Ds.§§AEBG;
+
+                                // AUSGABE DES LOGSATZES
+                                AENLAP = IVVR_Ds.§§AENR;
+                                KZNOAP = '0';
+
+                                Write VRSTAP1;
+
+                                //BEGRENZEN DES ALTEN SATZES
+                                GTBIAP = IVVR_Ds.§§AEBG;
+                                AEUSAP = 'VT1065RB';
+                                AENRAP = IVVR_Ds.§§AENR;
+                                AENLAP = 0;
+                                KZNOAP = *Blanks;
+                                AEDTAP = IVVR_Ds.§§SYJH + IVVR_Ds.§§SYD1;
+
+                                Update VRSTAPR;
+                                Leave;
+                             ENDIF;
+                             Readpe (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VRSTAP;
+                         ENDDO;
+                          §Y += 1;
+                      Endif;
+                   ENDDO;
+              endif;
+            ENDSR;
+
+      //***********************************************************
+      // DOSVG2 SCHREIBEN                                         *
+      //***********************************************************
+
+            Begsr §DOSVG;
+                  clear DOSVG2R;
+
+                  If KAKAIM = *Blanks;
+                     KFZAG2 = '2';
+                  Else;
+                     KFZAG2 = KAKAIM;
+                  ENDIF;
+
+                  // TAP UND FLOTTE IMMER MIT LEER BELEGEN BEI FAHRZEUGART
+
+                  §VT5 = %Subst(IVVR_Ds.§§VTNR:1:5);
+                  If  §VT5 = '1427Y' or
+                      §VT5 = '1430Y' or
+                      §VT5 = '1527Y' or
+                      §VT5 = '1530Y';
+                      KFZAG2 = ' ';
+                  Endif;
+
+                  // WKZ PRÜFEN;
+                  If KAKAIM <> *Blanks;
+                     BNNMIF =  'KAKA';
+                     WRDEIF =  KAKAIM;
+
+                     Chain (BNNMIF:TLCDIF:WRDEIF) IPIFWRL1;
+                     If %found(IPIFWRL1);
+                        KAKGG2 = DBVLIF;
+                     Endif;
+                   Else;
+                      KAKGG2 = 'Z';
+                   ENDIF;
+
+                   FA00G2 = IVVR_Ds.§§FA00;
+
+                   // AGENTUR MIT FA00, ADAR, VMNR FÜLLEN FÜR MANDANT 5
+                   AGVSG2 = *Blanks;
+                   If FA00G2 = '5';
+                      AGVSG2 = FA00G2;
+                      Setgt (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VTRHVV;
+                      If %Found(VTRHVV);
+                         Readpe (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VTRHVV;
+                         Dow Not %Eof(VTRHVV);
+                             If AKTKVV = '1';
+                                Leave;
+                             ENDIF;
+                         Readpe (IVVR_Ds.§§FA00 : IVVR_Ds.§§VTNR) VTRHVV;
+                         ENDDO;
+                         AGVSG2 = %trim(AGVSG2) + 'VM' + ARVMVV + %trim(VMNRVV);
+                      ENDIF;
+                   ENDIF;
+
+                   VTNRG2 = IVVR_Ds.§§VTNR;
+                   RSKNG2 = RSKNAP;
+                   AENRG2 = IVVR_Ds.§§AENR;
+                   KAKZG2 = KAKZIM;
+                   ANDTG2 = ANDTAP;
+                   VTBGG2 = %Editc(VTBGAP:'X');
+                   MFSFG2 = MFSFAP;
+                   MSGTG2 = §CON1;
+                   UNARG2 = '1';
+                   GDVNG2 = §GDVN;
+                   IDNRG2 = KFZIAP;
+                   HAVVG2 = '1';
+
+                   Chain (ARVNAP:VNNRAP) ADRSAD;
+                   If %found(ADRSAD);
+
+                     // GESCHLECHT WENN LEER ÜBER ANREDE
+                     If SEXKAD <> *Blanks;
+                        SEXKG2 = SEXKAD;
+                     Else;
+                       If ANRDAD = '1';
+                          SEXKG2 = '1';
+                       Endif;
+                       If ANRDAD = '2';
+                          SEXKG2 = '2';
+                       Endif;
+                     ENDIF;
+                     VNAMG2 = VNAMAD;
+                     NAMEG2 = NAM1AD;
+                     //STRAßE AUFBEREITEN ÜBER TL1205RB
+                     §STR0 = STR0AD;
+                     TL1205RB(§STR0:$STR:$HNR:$ZNR);
+                     STR0G2 = $STR;
+                     HSNRG2 = $HNR;
+                     HSNEG2 = $ZNR;
+
+                     If  LANDAD <> *Blanks;
+                         STAAG2 = LANDAD;
+                     Else;
+                         STAAG2 = 'D';
+                     ENDIF;
+
+                     PLZ0G2 = PLZ0AD;
+
+                     // ORT ERMITTELN
+                     LANDPL = LANDAD;
+                     ORTKPL = ORTKAD;
+                     Chain (LANDAD:ORTKAD) PLZ0PLL2;
+                     If %found(PLZ0PLL2);
+                        ORT0G2 = ORT0PL;
+                     ENDIF;
+                   ENDIF;
+
+                   §LIB = §§DTAL;
+                   If §LIB = 'DTA';
+                      BETAG2 = 'PP';
+                   Else;
+                      BETAG2 = 'PP';
+                   ENDIF;
+
+                   //Zeitstempel ermitteln
+
+                   TL1202CB(MSGZG2);
+
+                   MSGIG2 = 'VU' + %trim(§GDVN) + '-' + %trim(MSGZG2) + ' ' +
+                            %trim(KFZIIM);
+                   STSNG2 = '0';
+                   STRCG2 = '0';
+                   GDVAG2 = '000';
+                   AGVSG2 = *Blanks;
+                   ANUSG2 = IVVR_Ds.§§PGUS;
+                   ANDTG2 = ANDTAP;
+
+                   Write  DOSVG2R;
+            ENDSR;
+
