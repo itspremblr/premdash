@@ -1,6 +1,6 @@
-      * (C) AIOI München                                     2023 
+      * (C) PremDash München                                   2023 
       *---------------------------------------------------------------
-      * Änderung    :CHG-2022-12-0132.
+      * Änderung    :XXX-2022-12-0132.
       * Description : New Screen for Einwilligung  Customer Portal.
       * Datum       : 16.10.2023
       * Programmer  : Premananda Dash
