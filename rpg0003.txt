@@ -1,10 +1,10 @@
 **free
-    Ctl-opt Copyright('ANDIE Ismaning 2024') Option(*SrcStmt : *NoDebugIO)
+    Ctl-opt Copyright('PremDash Inc 2024') Option(*SrcStmt : *NoDebugIO)
             datedit(*YMD) Bnddir('YAJL/YAJL')
             DEBUG DECEDIT('0,') DftActgrp(*No) ActGrp(*Caller);
 
     //------------------------------------------------------------------------
-    // Änderung    : CHG-2024-12-0013
+    // Änderung    : XXX-2024-12-0013
     // Description : Deletion of spool file based on retention period.
     // Date       :  02.12.2024
     // Programmer :  Premananda Dash
