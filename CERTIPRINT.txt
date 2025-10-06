@@ -1,0 +1,91 @@
+      **************************************************************************
+      * (C) Intesa Sanpaolo                               2024 
+      *---------------------------------------------------------------
+      * Change      :CHG-2024-11-XXXXX.
+      * Description : Print Certificate
+      * Date        : 09.11.2024
+      * Programmer  : Premananda Dash
+      *---------------------------------------------------------------
+     A          R RCDNAME
+     A                                      SPACEB(001)
+     A                                    71
+     A                                      'SURNAME  NAME'
+     A          R RCDSTREET
+     A                                      SPACEB(2)
+     A                                    71
+     A                                      'CIVIC STREET'
+     A          R RCDCITY
+     A                                      SPACEB(3)
+     A                                    71
+     A                                      'CITY POSTCODE'
+     A          R RCDCOUNTRY
+     A                                      SPACEB(4)
+     A                                    71'LUXEMBOURG, '
+     A            PRDATE1       20        83
+     A
+     A          R RCDCERTI
+     A                                      SPACEB(7)
+     A                                    50
+     A                                             'CERTIFICATE'
+     A          R RCD006
+     A                                      SPACEB(10)
+     A                                     3'We are signed, Intesa Sanpaolo Ban-
+     A                                      k Luxembourg, certifications for th-
+     A                                      e present date of '
+     A            PRDATE2       30        90
+     A          R RCD008
+     A                                      SPACEB(12)
+     A                                    49
+     A                                            'NAME SURNAME'
+     A          R RCD009
+     A                                      SPACEB(13)
+     A                                     3
+     A                                      'Please note the following items ac-
+     A                                      cording to the terms of a ready-to--
+     A                                      wear contract: '
+     A          R RCD010
+     A                                      SPACEB(14)
+     A                                     3'Total amount in capital au 01.01.'
+     A            RCD010YR       4        36
+     A                                    41':'
+     A            BEGYRAMT      17  2     44EDTCDE(J)
+     A                                    68
+     A                                      'EUR'
+     A
+     A
+     A          R RCD011
+     A                                      SPACEB(15)
+     A                                     3'Total amount in capital au 31.12.'
+     A            RCD011YR       4        36
+     A                                    41':'
+     A            ENDYRAMT      17  2     44EDTCDE(J)
+     A                                    68
+     A                                      'EUR'
+     A          R RCD012
+     A                                      SPACEB(17)
+     A                                     3'Montant en capital remboursé durin-
+     A                                      g the period seen : '
+     A            CAPTAMT       17  2     57EDTCDE(J)
+     A                                    80
+     A                                      'EUR'
+     A          R RCD013
+     A                                      SPACEB(18)
+     A                                     3'Montant des intérêts versés during-
+     A                                       the civil year '
+     A            RCD013YR       4        53
+     A                                    58':'
+     A            INTAMT        17  2     60EDTCDE(J)
+     A                                    84
+     A                                      'EUR'
+     A          R RCD014
+     A                                      SPACEB(23)
+     A                                    91
+     A                                      'Understanding Sanpaolo Bank'
+     A          R RCD015
+     A                                      SPACEB(24)
+     A                                     3
+     A                                      'Luxembourg'
+     A          R RCD016
+     A                                      SPACEB(25)
+     A                                    96
+     A                                      'Public limited company'
