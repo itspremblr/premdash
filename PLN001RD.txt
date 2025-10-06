@@ -1,0 +1,191 @@
+      * (C) Intesa Sanpaolo                               2024 
+      *---------------------------------------------------------------
+      * Change      :CHG-2024-11-XXXXX.
+      * Description : New Screen for Personal Loan Management.
+      * Date        : 09.11.2024
+      * Programmer  : Premananda Dash
+      *---------------------------------------------------------------
+     A                                      INDARA
+     A                                      DSPSIZ(24 80 *DS3)
+     A                                      REF(*LIBL/PLN0001RI)
+     A                                      PRINT
+     A
+     A*
+     A*
+     A          R RCD001
+     A                                      CF01(01 'Exit')
+     A                                  1  3SYSNAME
+     A                                  1 26'Certificates of interest'
+     A                                      DSPATR(HI)
+     A            SCRDAT1        4A  O  1 51
+     A                                  1 60DATE
+     A                                      EDTCDE(Y)
+     A                                  1 71TIME
+     A                                  5  4'1. Personal Loan Management'
+     A                                  9  4'Option :'
+     A            SCROPT1        1   B  9 15
+     A N80                                  DSPATR(HI)
+     A  80                                  DSPATR(RI)
+     A N80                                  DSPATR(UL)
+     A                                 19  4'F01 = Exit'
+     A            SCRMSG1       70A  O 24  2
+     A  92                                  DSPATR(HI)
+     A  92                                  COLOR(RED)
+     A*
+     A          R RCD002
+     A                                      CF01(01 'Exit')
+     A                                  1  3SYSNAME
+     A                                  1 26'Certificates of interest'
+     A                                      DSPATR(HI)
+     A                                  1 71TIME
+     A            SCRDAT2        4A  O  1 51
+     A                                  1 60DATE
+     A                                      EDTCDE(Y)
+     A                                  5  4'Code Client :'
+     A            SCRCLNT2       8Y 0B  5 20
+     A N85                                  DSPATR(HI)
+     A  85                                  DSPATR(RI)
+     A N85                                  DSPATR(UL)
+     A                                      EDTWRD('     -   ')
+     A                                  7  4'Type Certificate : '
+     A            SCROPT2        1   B  7 26
+     A N81                                  DSPATR(HI)
+     A  81                                  DSPATR(RI)
+     A N81                                  DSPATR(UL)
+     A                                  7 30'(blank=ALL / V = Validated / T = T-
+     A                                      o be Validated)'
+     A                                 20  4'Enter to Continue  '
+     A                                 20 25'F01 = Exit  '
+     A            SCRMSG2       70A  O 24  2
+     A  92                                  DSPATR(HI)
+     A  92                                  COLOR(RED)
+     A*
+     A*
+     A          R RCD003SFL                 SFL
+     A  96                                  SFLNXTCHG
+     A                                      TEXT('Sub_File')
+     A            SCROPT3        1   B 10  4
+     A  86                                  DSPATR(RI)
+     A                                      DSPATR(UL)
+     A            SFLCLNTID      8Y 0O 10  8
+     A                                      EDTWRD('     -   ')
+     A            SLFPRMOIN R        B 10 19REFFLD(PRMOIN PPRETPERS)
+     A                                      DSPATR(UL)
+     A  84                                  DSPATR(PR)
+     A  82                                  COLOR(PNK)
+     A  83                                  COLOR(WHT)
+     A            SFLPRMOFI R        B 10 39REFFLD(PRMOFI PPRETPERS)
+     A                                      DSPATR(UL)
+     A  84                                  DSPATR(PR)
+     A  82                                  COLOR(PNK)
+     A  83                                  COLOR(WHT)
+     A            SFLPRCAPR R        B 10 60REFFLD(PRCAPR PPRETPERS)
+     A                                      DSPATR(UL)
+     A  84                                  DSPATR(PR)
+     A  82                                  COLOR(PNK)
+     A  83                                  COLOR(WHT)
+     A            SFLPRINT  R        B 11 60REFFLD(PRINT  PPRETPERS)
+     A                                      DSPATR(UL)
+     A  84                                  DSPATR(PR)
+     A  82                                  COLOR(PNK)
+     A  83                                  COLOR(WHT)
+     A
+     A*
+     A          R RCDSFLCTL                 SFLCTL(RCD003SFL)
+     A                                      TEXT('Sub_File_Control_rec')
+     A  90                                  PUTOVR
+     A  91                                  OVERLAY PROTECT
+     A*                                     KEEP
+     A                                      SFLSIZ(7)
+     A                                      SFLPAG(6)
+     A  93                                  SFLDSP
+     A N94                                  SFLDSPCTL
+     A  94                                  SFLCLR
+     A  95                                  SFLEND(*MORE)
+     A                                      CF01(01 'Prev.Screen')
+     A                                      CF06(06 'NEW')
+     A                                      CF07(07 'Valid ALL')
+     A                                      CF09(09 'Cert All')
+     A
+     A                                  1  3SYSNAME
+     A                                  1 24'Certificates of interest'
+     A                                      DSPATR(HI)
+     A            SCRDAT3        4A  O  1 51
+     A                                  1 60DATE
+     A                                      EDTCDE(Y)
+     A                                  1 71TIME
+     A                                  3  3'Code Client :'
+     A            SCRCLNT3       8Y 0B  3 20
+     A                                      EDTWRD('     -   ')
+     A                                      OVRDTA
+     A                                  4  3'Type Certificate : '
+     A            SCRCERTTYP     1   O  4 26
+     A                                      OVRDTA
+     A                                  6  3'2 = Update  5 = Display  7 = Vali-
+     A                                      date(Pink)  9 = Certificate(White)'
+     A                                      DSPATR(HI)
+     A                                  7  3'Opt Cod      Loan Beginning Year  -
+     A                                      Loan End Year      Capital  Refunde-
+     A                                      d'
+     A                                  8  7 'Cliente'
+     A                                  8 56'Interest Payed'
+      * Trailer Format 1.
+     A          R SFLTLR
+     A  91                                  PUTOVR
+     A  92                                  OVERLAY PROTECT
+     A            SCRMSG3       70A  O 24  2
+     A                                      DSPATR(HI)
+     A                                      COLOR(RED)
+     A                                      OVRDTA
+     A                                 23  2'Enter to Continue  PF01=Prev. Scre-
+     A                                      en  PF06=New  PF07=Valid ALL  PF09=-
+     A                                      Cert.All'
+     A
+     A
+     A*
+     A          R RCD004
+     A                                      CF01(01 'Exit')
+     A                                  1  3SYSNAME
+     A                                  1 26'Certificates of interest'
+     A                                      DSPATR(HI)
+     A                                  1 71TIME
+     A            SCRDAT4        4A  O  1 51
+     A                                  1 60DATE
+     A                                      EDTCDE(Y)
+     A                                  3  2'State Certificate : '
+     A            FLDOPT4        1   O  3 23
+     A            OPTDESC       30A  O  3 27
+     A                                        COLOR(WHT)
+     A  87                                    DSPATR(ND)
+     A                                  5  2'Code Client :'
+     A            CLIENTID       8Y 0B  5 20
+     A                                        EDTWRD('     -   ')
+     A  84                                    DSPATR(PR)
+     A N70                                    DSPATR(HI)
+     A  70                                    DSPATR(RI)
+     A                                  8  2'Loan Beginning Year :'
+     A            STARTYR2      17  2B  8 25
+     A  84                                    DSPATR(PR)
+     A N71                                    DSPATR(HI)
+     A  71                                    DSPATR(RI)
+     A                                 10  2'Loan End Year      :'
+     A            ENDYR2        17  2B 10 25
+     A  84                                    DSPATR(PR)
+     A N72                                    DSPATR(HI)
+     A  72                                    DSPATR(RI)
+     A                                 12  2'Capital Refunded  :'
+     A            CAPREFUND     17  2B 12 25
+     A  84                                    DSPATR(PR)
+     A N73                                    DSPATR(HI)
+     A  73                                    DSPATR(RI)
+     A                                 14  2'Interest Payed    :'
+     A            INTPAID       17  2B 14 25
+     A  84                                    DSPATR(PR)
+     A N74                                    DSPATR(HI)
+     A  74                                    DSPATR(RI)
+     A                                 21  3'Enter to Continue  '
+     A                                 21 24'F01 = Exit  '
+     A            SCRMSG4       70A  O 24  2
+     A  92                                  DSPATR(HI)
+     A  92                                  COLOR(RED)
+     A*
