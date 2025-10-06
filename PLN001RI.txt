@@ -1,0 +1,720 @@
+**free
+    Ctl-opt Copyright('Intesa Sanpaolo 2024') Option(*SrcStmt : *NoDebugIO)
+            DEBUG DECEDIT('0,') DATEDIT(*DMY/)
+            DftActgrp(*No) ActGrp(*Caller);
+    //------------------------------------------------------------------------
+    // Change      : CHG-2022-11-XXXX.
+    // Description : Personal Loan Management.
+    // Date       :  10.11.2024
+    // Programmer :  Premananda Dash
+    //------------------------------------------------------------------------
+
+    // Display File.
+    Dcl-f PLN001RD  Workstn sfile(RCD003SFL:#RrnSfl) Infds(FileInfo)
+                    Indds(IndDS1);
+
+    //Printer file
+    Dcl-f CERTIPRINT  Printer  OflInd(overflow);
+
+    Dcl-Ds PPRETPERSDS extname('PPRETPERS') qualified;
+    End-Ds;
+
+    // file Information Data structure;
+    Dcl-Ds FileInfo;
+           PressedKey char(1) Pos(369);            // Capture Key pressed.
+    End-Ds;
+
+    // Indicator data stucture mapped to PLN001RD display file.
+    Dcl-Ds IndDS1;
+           Create              Ind Pos(6);
+           screenExit          Ind pos(1);
+           validateAll         Ind pos(7);
+           certifyAll          Ind pos(9);
+           scr1Invalidoption   Ind pos(80);
+           scr2InvalidOption   Ind pos(81);
+           txt_colorPink       Ind pos(82);
+           txt_colorWhite      Ind pos(83);
+           txt_protected       Ind pos(84);
+           InvalidClient       Ind pos(85);
+           scr3InvalidOption   Ind pos(86);
+           noDispaly           Ind pos(87);
+           Scr_Putover         Ind pos(90);
+           Scr_Overlay         Ind Pos(91);
+           displayMessage      Ind pos(92);
+           SFL_DSP             Ind pos(93);
+           SFL_CLEAR           Ind Pos(94);
+           SFL_END             Ind pos(95);
+           SFLnextChangeRec    Ind pos(96);
+    End-Ds;
+
+    Dcl-S DayOfMonth           zoned(2);
+    Dcl-S MonthName            char(10) ;
+    Dcl-S YearNumber           zoned(4) ;
+
+    // Enter Key constant.
+    Dcl-C Enter_Key const(x'F1');                       // If enter key is pressed.
+
+    // Program Status data Structure.
+    Dcl-Ds Pgm_Stat PSDS;
+           Pgm_Status *STATUS;
+           Routine    *ROUTINE;
+           Current_User char(10) pos(358);
+     End-Ds;
+
+    //Standalone field.
+    Dcl-S  #RrnSfl                  Packed(4);               //Sub-file RRN.
+    Dcl-S  displayScreen1           Ind;
+    Dcl-S  displayScreen2           Ind;
+    Dcl-S  displayScreen3           Ind;
+    Dcl-S  displayScreen4           Ind;
+    Dcl-S  ErrorPass                Ind;
+    Dcl-S  overflow                 Ind;
+    Dcl-S  recCount                packed(8);
+    Dcl-S  customerId              packed(8);
+    Dcl-S  certificateType         char(1);
+    Dcl-S  LoanBeginningYr         packed(17:2);
+    Dcl-S  LoanEndYr               packed(17:2);
+    Dcl-S  capitalRefund           packed(17:2);
+    Dcl-S  interestPaid            packed(17:2);
+
+    //*************************************************************************
+    // Main Processing.
+    //*************************************************************************
+    Exec sql set option commit = *none;
+
+    Monitor;
+
+    SCRDAT1 = %subst(%Editc(*date:'X'):5:4);
+
+    Exfmt RCD001;               // Display Initial Menu (Screen 1)
+
+    displayScreen1 = *on;
+
+    Dow (screenExit = *off) and (displayScreen1 = *on);
+
+       Clear SCRMSG1;
+       displayMessage = *off;
+       If pressedKey = Enter_Key;            // Proceed further if Enter Key pressed.
+          If SCROPT1 <> '1';
+             SCRMSG1  = 'Invalid Option';
+             scr1Invalidoption = *on;
+             displayMessage = *on;
+             SCRDAT1 = %subst(%Editc(*date:'X'):5:4);
+             Exfmt RCD001;
+             scr1Invalidoption = *off;
+             displayMessage = *off;
+          Else;
+             SCRDAT2 = %subst(%Editc(*date:'X'):5:4);
+             Exfmt RCD002;         // Display screen2 to enter client code .
+             displayScreen1 = *off;
+             displayScreen2 = *on;
+
+             Dow (screenExit = *off) and (displayScreen2 = *on);
+                 If pressedKey = Enter_Key;            // Proceed further if Enter Key pressed.
+                    processScreen2();     // Validate Client ID and Type certificate
+
+                    If InvalidClient = *off and scr2Invalidoption = *off;
+                       // Proceess Screen 3.
+                       processScreen3();
+                    ENDIF;
+                    SCRDAT2 = %subst(%Editc(*date:'X'):5:4);
+                    Exfmt RCD002;
+                    InvalidClient = *off;
+                    scr2Invalidoption = *off;
+                 Else;
+                    If screenExit = *off;
+                       SCRMSG2 = 'Press Enter Key to continue';
+                       displayMessage = *on;
+                       SCRDAT2 = %subst(%Editc(*date:'X'):5:4);
+                       Exfmt RCD002;
+                       InvalidClient = *off;
+                       scr2Invalidoption = *off;
+                       displayMessage = *off;
+                    endif;
+                 ENDIF;
+             ENDDO;
+
+             screenExit = *off;
+             displayScreen2 = *off;
+             SCRDAT1 = %subst(%Editc(*date:'X'):5:4);
+             Exfmt RCD001;
+             displayScreen1 = *on;
+          ENDIF;
+       Else;
+           If screenExit = *off;
+              SCRMSG1  = 'Press Enter Key to continue';
+              screenExit = *off;
+              displayScreen2 = *off;
+              displayMessage = *on;
+              SCRDAT1 = %subst(%Editc(*date:'X'):5:4);
+              Exfmt RCD001;
+              displayScreen1 = *on;
+              displayMessage = *off;
+           Endif;
+       Endif;
+    Enddo;
+
+    On-Error *all;
+       Dump;
+       return;
+    Endmon;
+
+
+    *inlr = *on;
+
+    //*************************************************************************
+    // Display Personal Loan Managamen Screen in order to validate Client ID
+    // and type Of Certificate.
+    //*************************************************************************
+    Dcl-Proc ProcessScreen2;
+             clear recCount;
+             clear SCRMSG2;
+
+             InvalidClient = *off;
+             scr2Invalidoption = *off;
+             customerId = SCRCLNT2;
+             certificateType = SCROPT2;
+
+             // Validate Client ID.
+             If SCRCLNT2 <> *zeros;
+                Exec Sql Select count(*) into :recCount from PPRETPERS
+                        Where PRCPTE =:SCRCLNT2;
+                If Sqlcode <> 0 or recCount = 0;
+                   SCRMSG2 = 'Invalid Client';
+                   InvalidClient = *on;
+               ENDIF;
+             Endif;
+
+             //Validate Type Certificate.
+             If (SCROPT2 <> *blanks) and (SCROPT2 <> 'V') and (SCROPT2 <> 'T');
+                scr2Invalidoption = *on;
+             ENDIF;
+    END-PROC;
+
+    //*************************************************************************
+    // Display Personal Loan Managamen Screen in order to validate and Generate
+    // Certificate.
+    //*************************************************************************
+    Dcl-Proc ProcessScreen3;
+             SCRCLNT3 = customerId;
+             SCRCERTTYP = certificateType;
+             displayScreen3 = *on;
+
+             Dow displayScreen3 = *on;
+                 Clear SCROPT3;
+                 SubFile_Clear();
+                 LoadSubfile();
+                 Write SFLTLR;
+                 Scr_Overlay = *On;
+                 SCRDAT3 = %subst(%Editc(*date:'X'):5:4);
+                 Exfmt RCDSFLCTL;
+                 screen3_CmdProc();
+                 if PressedKey = Enter_Key;
+                    If displayScreen3 = *on;
+                       If create = *off;
+                          readChangedSubFile();
+                       Endif;
+                       Scr_Putover = *on;
+                    ENDIF;
+                 Endif;
+             ENDDO;
+    END-PROC;
+
+   //**************************************************************
+   // Clear Sub-file before loading.
+   //**************************************************************
+
+    Dcl-Proc SubFile_Clear;
+             SFL_CLEAR = *On;
+             Write RCDSFLCTL;
+             SFL_CLEAR = *Off;
+    END-PROC SubFile_Clear;
+
+    //**************************************************************
+    // Load Sub file Procedure.
+    // This procedure loads personal loan details from PPRETPERS.
+    //**************************************************************
+
+    Dcl-Proc LoadSubFile;
+
+             Clear PPRETPERSDS;
+             Clear #RrnSfl;
+             SFL_DSP = *Off;
+             SFL_END = *Off;
+
+             // Declare Scroll Cursor to load number of records into sub-file
+             If customerId <> *zeros;
+                Exec Sql Declare PPRETPERS_Cursor scroll cursor for
+                        Select * from PPRETPERS Where PRCPTE = :customerId;
+
+                //Open Cursor
+                Exec Sql Open PPRETPERS_Cursor;
+
+                // Fetch First Row .
+                Exec Sql Fetch first from PPRETPERS_Cursor into :PPRETPERSDS;
+
+             Else;
+                Exec Sql Declare PPRETPERS_Cursor2 scroll cursor for
+                        Select * from PPRETPERS order by PRCPTE;
+                //Open Cursor
+                Exec Sql Open PPRETPERS_Cursor2;
+
+                // Fetch First Row .
+                Exec Sql Fetch first from PPRETPERS_Cursor2 into :PPRETPERSDS;
+
+             Endif;
+
+             Dow SQLCODE = 0;
+
+                 #RrnSfl += 1;
+                 txt_colorPink = *off;
+                 txt_colorWhite = *off;
+
+                 SCROPT2 = ' ';
+                 SFLCLNTID = PPRETPERSDS.PRCPTE;
+                 SLFPRMOIN = PPRETPERSDS.PRMOIN;
+                 SFLPRMOFI = PPRETPERSDS.PRMOFI;
+                 SFLPRCAPR = PPRETPERSDS.PRCAPR;
+                 SFLPRINT = PPRETPERSDS.PRCAPR;
+                 Select;
+
+                   When (PPRETPERSDS.PRSTAT = 'V');
+                        txt_colorpink = *off;
+                        txt_colorWhite = *off;
+                        txt_protected = *off;
+
+                   When (PPRETPERSDS.PRSTAT <> 'V') and (PPRETPERSDS.PRSTAT <> 'C');
+                        txt_colorpink = *on;
+
+                   When (PPRETPERSDS.PRSTAT = 'C');
+                        txt_colorpink = *off;
+                        txt_colorWhite = *on;
+                        txt_protected = *on;
+                 ENDSL;
+
+                 Write RCD003SFL;
+
+                 If #RrnSfl = 9999;
+                    Leave;
+                 ENDIF;
+
+                 If customerId <> *zeros;
+                    Exec Sql Fetch next from PPRETPERS_Cursor into :PPRETPERSDS;
+                 Else;
+                    Exec Sql Fetch next from PPRETPERS_Cursor2 into :PPRETPERSDS;
+                 ENDIF;
+
+             ENDDO;
+
+             // Close cursor.
+             If customerId <> *zeros;
+                Exec Sql Close PPRETPERS_Cursor;
+             Else;
+                Exec Sql Close PPRETPERS_Cursor2;
+             Endif;
+
+             If #RrnSfl > 0;
+                SFL_DSP = *On;
+                SFL_END = *ON;
+             ENDIF;
+    END-PROC;
+    //**************************************************************
+    // process Command for Screen 3.
+    //**************************************************************
+    Dcl-Proc screen3_CmdProc;
+
+             If screenExit = *on;             //PF01 pressed, no processing
+                displayScreen3 = *off;
+             ENDIF;
+
+             If Create = *on;
+                Clear RCD004;
+                SCRDAT4 = %subst(%Editc(*date:'X'):5:4);
+
+                ErrorPass = *off;
+                Dow ErrorPass = *off;
+
+                    Exfmt RCD004;
+
+                    If screenExit = *on;
+                       leave;
+                    ENDIF;
+                    clear SCRMSG4;
+                    displayMessage = *off;
+                    *in70 = *off;
+                    *in71 = *off;
+                    *in72 = *off;
+                    *in73 = *off;
+                    *in74 = *off;
+
+                    If INTPAID = *zeros;
+                       *in74 = *on;
+                       SCRMSG4 = 'Enter Interest Pay Value';
+                    ENDIF;
+
+                    If CAPREFUND = *zeros;
+                       *in73 = *on;
+                       SCRMSG4 = 'Enter Captial Refund Value';
+                    ENDIF;
+
+                    If ENDYR2 = *zeros;
+                       *in72 = *on;
+                       SCRMSG4 = 'Enter Laon End Yr Value';
+                    ENDIF;
+
+                    If STARTYR2 = *zeros;
+                       *in71 = *on;
+                       SCRMSG4 = 'Enter Laon Beg Yr Value';
+                    ENDIF;
+
+                    If CLIENTID = *zeros;
+                       *in70 = *on;
+                       SCRMSG4 = 'Enter Valid Client Num';
+                    ENDIF;
+
+                    If (*in70 = *on) or (*in71 = *on) or (*in72 = *on) or
+                       (*in73 = *on) or (*in74 = *on);
+                       ErrorPass = *off;
+                       displayMessage = *on;
+                    Else;
+                       ErrorPass = *on;
+                    ENDIF;
+
+                ENDDO;
+
+                If ErrorPass = *on;
+                   Clear PPRETPERSDS;
+                   PPRETPERSDS.PRCPTE = CLIENTID;
+                   PPRETPERSDS.PRMOIN = STARTYR2;
+                   PPRETPERSDS.PRMOFI = ENDYR2;
+                   PPRETPERSDS.PRCAPR = CAPREFUND;
+                   PPRETPERSDS.PRINT  = INTPAID;
+                   PPRETPERSDS.PRINDT = *date;
+                   PPRETPERSDS.PRINTM = %Dec(%time():*HMS);
+                   PPRETPERSDS.PRINUS = Current_User;
+
+                   Exec Sql insert into PPRETPERS values(:PPRETPERSDS);
+
+                   // Check DB2_MESSAGE_ID = SQL7956 for insert success.
+                Endif;
+             ENDIF;
+
+            // If PF07 pressed, validate all.
+            If validateAll;
+               validateallLoan();
+            ENDIF;
+
+            // If PF09 pressed, create certificate for all.
+            If certifyAll;
+               printCertificateAll();
+            ENDIF;
+
+    END-PROC;
+
+
+    //**************************************************************
+    // Read changed Record from Screen 3 Subfile.
+    //**************************************************************
+    Dcl-Proc readChangedSubFile;
+             *In96 = *off;
+             ErrorPass = *off;
+             Dow ErrorPass = *off;
+                 validateChangedRec();
+                 If ErrorPass = *off;
+                    SCRDAT3 = %subst(%Editc(*date:'X'):5:4);
+                    Exfmt RCDSFLCTL;
+                 ENDIF;
+             ENDDO;
+    END-PROC;
+    //**************************************************************
+    // Validate changed record on Sub File.
+    //**************************************************************
+    Dcl-Proc validateChangedRec;
+             txt_protected = *off;
+             ErrorPass = *On;
+             Readc RCD003SFL;
+             Dow Not %eof;
+                 If SCROPT3 in %list('2':'5':'7':'9');
+                    scr3InvalidOption = *off;
+                    *IN96 = *on;
+                     Select;
+                       When SCROPT3 = '5';
+                            // Display Inquiry screen.
+                            txt_protected = *on;
+                            Exec Sql Select * into :PPRETPERSDS from PPRETPERS
+                                     Where PRCPTE = :SFLCLNTID;
+                            FLDOPT4 = PPRETPERSDS.PRSTAT;
+
+                            Select;
+                              When FLDOPT4 = 'V';
+                                   OPTDESC = 'Validated';
+
+                              When FLDOPT4 = 'C';
+                                   OPTDESC = 'Certificate';
+
+                              When FLDOPT4 = ' ';
+                                   OPTDESC = 'To be Validate/Certificate';
+                            ENDSL;
+                            CLIENTID  = PPRETPERSDS.PRCPTE;
+                            STARTYR2  = PPRETPERSDS.PRMOIN;
+                            ENDYR2    = PPRETPERSDS.PRMOFI;
+                            CAPREFUND = PPRETPERSDS.PRCAPR;
+                            INTPAID   = PPRETPERSDS.PRINT;
+                            SCRDAT4 = %subst(%Editc(*date:'X'):5:4);
+                            Exfmt RCD004;
+                            If screenExit = *on;
+                               leave;
+                            ENDIF;
+
+                            Readc RCD003SFL;
+
+                       When SCROPT3 = '7';
+                            // Validate
+                            PPRETPERSDS.PRUPDT = *date;
+                            PPRETPERSDS.PRINTM = %Dec(%time():*HMS);
+                            PPRETPERSDS.PRUPUS = Current_User;
+
+                            PPRETPERSDS.PRVLDT = *date;
+                            PPRETPERSDS.PRVLTM = %Dec(%time():*HMS);
+                            PPRETPERSDS.PRVLUS = Current_User;
+
+                            Exec Sql Update PPRETPERS
+                                     set PRMOIN = :SLFPRMOIN,
+                                         PRMOFI = :SFLPRMOFI,
+                                         PRCAPR = :SFLPRCAPR,
+                                         PRINT  = :SFLPRINT,
+                                         PRUPDT = :PPRETPERSDS.PRUPDT,
+                                         PRUPTM = :PPRETPERSDS.PRINTM,
+                                         PRUPUS = :PPRETPERSDS.PRUPUS,
+                                         PRVLDT = :PPRETPERSDS.PRVLDT,
+                                         PRVLTM = :PPRETPERSDS.PRVLTM,
+                                         PRVLUS = :PPRETPERSDS.PRVLUS,
+                                         PRSTAT = 'V'
+                                      Where PRCPTE = :SFLCLNTID;
+
+                            Update RCD003SFL;
+                            Readc RCD003SFL;
+
+                       When SCROPT3 = '9';
+                            PPRETPERSDS.PRCRDT = *date;
+                            PPRETPERSDS.PRCRTM = %Dec(%time():*HMS);
+                            PPRETPERSDS.PRCRUS = Current_User;
+                            // Create certificate.
+                            Exec Sql Update PPRETPERS
+                                     set PRMOIN = :SLFPRMOIN,
+                                         PRMOFI = :SFLPRMOFI,
+                                         PRCAPR = :SFLPRCAPR,
+                                         PRINT  = :SFLPRINT,
+                                         PRCRDT = :PPRETPERSDS.PRCRDT,
+                                         PRCRTM = :PPRETPERSDS.PRCRTM,
+                                         PRCRUS = :PPRETPERSDS.PRCRUS,
+                                         PRSTAT = 'C'
+                                      Where PRCPTE = :SFLCLNTID;
+                            LoanBeginningYr = SLFPRMOIN;
+                            LoanEndYr       = SFLPRMOFI;
+                            capitalRefund   = SFLPRCAPR;
+                            interestPaid    = SFLPRINT;
+                            printCertificate();
+
+                            Update RCD003SFL;
+                            Readc RCD003SFL;
+                      ENDSL;
+
+                 Else;
+                    scr3InvalidOption = *on;
+                    ErrorPass = *off;
+                 ENDIF;
+             ENDDO;
+    END-PROC;
+
+    //**************************************************************
+    // Print Certificate
+    //**************************************************************
+    Dcl-Proc printCertificate;
+
+             Clear overflow;
+
+             Exec sql SET :DayOfMonth = DAYOFMONTH(CURRENT DATE);
+             Exec sql SET :MonthName = MONTHNAME(CURRENT DATE);
+             Exec sql SET :YearNumber = YEAR(CURRENT DATE);
+             PRDATE1 = %trimr(MonthName) + ' ' + %Editc(DayOfMonth:'X') + ', ' +
+                       %char(YearNumber);
+
+             PRDATE2 = %Editc(DayOfMonth:'X') + ' ' + %trimr(MonthName) + ' ' +
+                       %char(YearNumber) + ',';
+
+             RCD010YR = %char(YearNumber);
+             RCD011YR = %char(YearNumber);
+             RCD013YR = %char(YearNumber);
+             BEGYRAMT = LoanBeginningYr;
+             ENDYRAMT = LoanEndYr;
+             CAPTAMT  = capitalRefund;
+             INTAMT   = interestPaid;
+
+             Write RCDNAME;
+             Write RCDSTREET;
+             Write RCDCITY;
+             Write RCDCOUNTRY;
+             Write RCDCERTI;
+             Write RCD006;
+             Write RCD008;
+             Write RCD009;
+             Write RCD010;
+             Write RCD011;
+             Write RCD012;
+             Write RCD013;
+             Write RCD014;
+             Write RCD015;
+             Write RCD016;
+             if overflow;
+                 Write RCDNAME;
+                 Write RCDSTREET;
+                 Write RCDCITY;
+                 Write RCDCOUNTRY;
+                 Write RCDCERTI;
+                 Write RCD006;
+                 Write RCD008;
+                 Write RCD009;
+                 Write RCD010;
+                 Write RCD011;
+                 Write RCD012;
+                 Write RCD013;
+                 Write RCD014;
+                 Write RCD015;
+                 Write RCD016;
+                 Clear overflow;
+             ENDIF;
+    END-PROC;
+
+    //**************************************************************
+    // Validate all Loan
+    //**************************************************************
+    Dcl-Proc validateAllLoan;
+
+            Clear PPRETPERSDS;
+            // Get all records from PPRETPERS where status is not V and C
+            // Update status to V.
+
+            // Declare Scroll Cursor .
+
+             If SCRCLNT3 <> *zeros;
+                Exec Sql Declare PPRETPERS_Cursor3 scroll cursor for
+                        Select * from PPRETPERS Where PRCPTE = :SCRCLNT3 and
+                                                      PRSTAT not in ('V', 'C');
+
+                //Open Cursor
+                Exec Sql Open PPRETPERS_Cursor3;
+
+                // Fetch First Row .
+                Exec Sql Fetch first from PPRETPERS_Cursor3 into :PPRETPERSDS;
+
+             Else;
+                Exec Sql Declare PPRETPERS_Cursor4 scroll cursor for
+                        Select * from PPRETPERS Where PRSTAT not in ('V', 'C')
+                        order by PRCPTE;
+
+                //Open Cursor
+                Exec Sql Open PPRETPERS_Cursor4;
+
+                // Fetch First Row .
+                Exec Sql Fetch first from PPRETPERS_Cursor4 into :PPRETPERSDS;
+
+             Endif;
+
+             Dow SQLCODE = 0;
+                 PPRETPERSDS.PRUPDT = *date;
+                 PPRETPERSDS.PRINTM = %Dec(%time():*HMS);
+                 PPRETPERSDS.PRUPUS = Current_User;
+
+                 PPRETPERSDS.PRVLDT = *date;
+                 PPRETPERSDS.PRVLTM = %Dec(%time():*HMS);
+                 PPRETPERSDS.PRVLUS = Current_User;
+
+                 Exec Sql Update PPRETPERS
+                      Set PRUPDT = :PPRETPERSDS.PRUPDT,
+                          PRUPTM = :PPRETPERSDS.PRINTM,
+                          PRUPUS = :PPRETPERSDS.PRUPUS,
+                          PRVLDT = :PPRETPERSDS.PRVLDT,
+                          PRVLTM = :PPRETPERSDS.PRVLTM,
+                          PRVLUS = :PPRETPERSDS.PRVLUS,
+                          PRSTAT = 'V';
+
+                 If SCRCLNT3 <> *zeros;
+                    Exec Sql Fetch next from PPRETPERS_Cursor3 into :PPRETPERSDS;
+                 Else;
+                    Exec Sql Fetch next from PPRETPERS_Cursor4 into :PPRETPERSDS;
+                 ENDIF;
+             ENDDO;
+
+              // Close cursor.
+             If SCRCLNT3 <> *zeros;
+                Exec Sql Close PPRETPERS_Cursor3;
+             Else;
+                Exec Sql Close PPRETPERS_Cursor4;
+             Endif;
+
+    END-PROC;
+
+    //**************************************************************
+    // Create Certificate for all Loans
+    //**************************************************************
+    Dcl-Proc printCertificateAll;
+            Clear PPRETPERSDS;
+            // Get all records from PPRETPERS where status is not C
+            // Update status to C.
+
+            // Declare Scroll Cursor .
+
+             If SCRCLNT3 <> *zeros;
+                Exec Sql Declare PPRETPERS_Cursor5 scroll cursor for
+                        Select * from PPRETPERS Where PRCPTE = :SCRCLNT3 and
+                                                      PRSTAT <> 'C';
+
+                //Open Cursor
+                Exec Sql Open PPRETPERS_Cursor5;
+
+                // Fetch First Row .
+                Exec Sql Fetch first from PPRETPERS_Cursor5 into :PPRETPERSDS;
+
+             Else;
+                Exec Sql Declare PPRETPERS_Cursor6 scroll cursor for
+                        Select * from PPRETPERS Where PRSTAT <> 'C'
+                        order by PRCPTE;
+
+                //Open Cursor
+                Exec Sql Open PPRETPERS_Cursor6;
+
+                // Fetch First Row .
+                Exec Sql Fetch first from PPRETPERS_Cursor6 into :PPRETPERSDS;
+
+             Endif;
+
+             Dow SQLCODE = 0;
+                 PPRETPERSDS.PRCRDT = *date;
+                 PPRETPERSDS.PRCRTM = %Dec(%time():*HMS);
+                 PPRETPERSDS.PRCRUS = Current_User;
+                 // Create certificate.
+                 Exec Sql Update PPRETPERS
+                      Set  PRCRDT = :PPRETPERSDS.PRCRDT,
+                           PRCRTM = :PPRETPERSDS.PRCRTM,
+                           PRCRUS = :PPRETPERSDS.PRCRUS,
+                           PRSTAT = 'C';
+                           LoanBeginningYr = PPRETPERSDS.PRMOIN;
+                           LoanEndYr       = PPRETPERSDS.PRMOFI;
+                           capitalRefund   = PPRETPERSDS.PRCAPR;
+                           interestPaid    = PPRETPERSDS.PRINT;
+                           printCertificate();
+                 If SCRCLNT3 <> *zeros;
+                    Exec Sql Fetch next from PPRETPERS_Cursor5 into :PPRETPERSDS;
+                 Else;
+                    Exec Sql Fetch next from PPRETPERS_Cursor6 into :PPRETPERSDS;
+                 ENDIF;
+             ENDDO;
+
+              // Close cursor.
+             If SCRCLNT3 <> *zeros;
+                Exec Sql Close PPRETPERS_Cursor5;
+             Else;
+                Exec Sql Close PPRETPERS_Cursor6;
+             Endif;
+    END-PROC;
