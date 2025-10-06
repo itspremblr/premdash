@@ -1,0 +1,35 @@
+      * (C) Intesa Sanpaolo                                     2024 
+      *---------------------------------------------------------------
+      *******************************************************
+      * PPRETPERS - EXTRACTION PRÊTS PERSONNELS             *
+      *******************************************************
+      * Change      :CHG-2024-11-XXXX.
+      * Description : New Table for Personal Loan Management.
+      * Date        : 09.11.2024
+      * Programmer  : Premananda Dash
+      *---------------------------------------------------------------
+     A          R RPRETP
+     A            PRCPTE         8  0       COLHDG('COMPTE COD-LOC')
+     A            PRMOIN        17  2       COLHDG('PRÊT DEBUT ANNÉE')
+     A            PRMOFI        17  2       COLHDG('PRÊT FIN ANNÉE')
+     A            PRCAPR        17  2       COLHDG('CAPITAL REMBOURSÉ')
+     A            PRINT         17  2       COLHDG('INTÉRÊTS PAYÉS')
+     A            PRANNE         4  0       COLHDG('ANNÉE FISCALE')
+     A            PRSUF          4  0       COLHDG('SUF CONTRAT')
+     A            PRVALL         6  0       COLHDG('VALUE')
+     A            PRDUEL         6  0       COLHDG('DUE')
+     A            PRFINL         6  0       COLHDG('FIN')
+     A            PRCLOS         1          COLHDG('CLOSE')
+     A            PRINDT         8  0       COLHDG('INPUT DATE')
+     A            PRINTM         6  0       COLHDG('INPUT TIME')
+     A            PRINUS        10          COLHDG('INPUT USER')
+     A            PRUPDT         8  0       COLHDG('UPDATE DATE')
+     A            PRUPTM         6  0       COLHDG('UPDATE TIME')
+     A            PRUPUS        10          COLHDG('UPDATE USER')
+     A            PRVLDT         8  0       COLHDG('VALID DATE')
+     A            PRVLTM         6  0       COLHDG('VALID TIME')
+     A            PRVLUS        10          COLHDG('VALID USER')
+     A            PRCRDT         8  0       COLHDG('CERTIF DATE')
+     A            PRCRTM         6  0       COLHDG('CERTIF TIME')
+     A            PRCRUS        10          COLHDG('CERTIF USER')
+     A            PRSTAT         1          COLHDG('STATUS')
