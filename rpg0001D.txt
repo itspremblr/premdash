@@ -1,4 +1,4 @@
-      * (C) PremDash München                                   2023 
+      
       *---------------------------------------------------------------
       * Änderung    :XXX-2022-12-0132.
       * Description : New Screen for Einwilligung  Customer Portal.
